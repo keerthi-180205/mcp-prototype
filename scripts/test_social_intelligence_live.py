@@ -14,7 +14,11 @@ import json
 import os
 import sys
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # Ensure workspace root is in python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,7 +32,6 @@ from server.services.filtering import (
 from server.services.social_intelligence import get_social_intelligence_service
 from server.storage.sqlite import get_social_records, get_social_stats, save_social_records
 
-load_dotenv()
 
 
 async def run_live_check(topic: str, platforms: list, months: int, limit: int):
