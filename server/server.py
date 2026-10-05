@@ -1004,6 +1004,47 @@ def generate_social_report(
         return {"status": "error", "message": str(exc)}
 
 
+@mcp.tool()
+async def search_social_topic(
+    query: str,
+    platform: str = "instagram",
+    top_n: int = 20,
+    comments_per_content: int = 20,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    days_back: Optional[int] = None,
+    min_relevance: float = 0.0,
+    auto_store: bool = True,
+) -> Dict[str, Any]:
+    """Universal social-search and interaction-discovery tool.
+
+    Accepts an arbitrary natural language query (e.g. 'Virat', 'mental health',
+    'ebook selling', 'fitness') without requiring any post/reel or profile URL.
+
+    Discovers relevant content, ranks candidates deterministically, selects the top N,
+    fetches public comments & commenter information, deduplicates results,
+    attaches provenance metadata, and returns a fully normalized schema.
+    """
+    logger.info(
+        "[SOCIAL] search_social_topic called: query=%r, platform=%r, top_n=%d, comments_per_content=%d",
+        query,
+        platform,
+        top_n,
+        comments_per_content,
+    )
+    return await social_service.search_social_topic(
+        query=query,
+        platform=platform,
+        top_n=top_n,
+        comments_per_content=comments_per_content,
+        date_from=date_from,
+        date_to=date_to,
+        days_back=days_back,
+        min_relevance=min_relevance,
+        auto_store=auto_store,
+    )
+
+
 if __name__ == "__main__":
     mcp.run()
 

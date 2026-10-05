@@ -45,15 +45,18 @@ def parse_iso_datetime(dt_str: Optional[str]) -> Optional[datetime.datetime]:
     return None
 
 
+import math
+
 def filter_by_recency(
     records: List[NormalizedSocialRecord],
     months_back: Optional[int] = 3,
+    days_back: Optional[int] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ) -> List[NormalizedSocialRecord]:
     """
     Filter records based on actual publication timestamps.
-    Supports months_back (e.g. 3, 4, 6, 12) or custom date_from and date_to.
+    Supports days_back, months_back, or custom date_from and date_to.
     """
     now = datetime.datetime.utcnow()
     cutoff_from = None
@@ -61,6 +64,8 @@ def filter_by_recency(
 
     if date_from:
         cutoff_from = parse_iso_datetime(date_from)
+    elif days_back is not None and days_back > 0:
+        cutoff_from = now - datetime.timedelta(days=days_back)
     elif months_back and months_back > 0:
         cutoff_from = now - datetime.timedelta(days=months_back * 30)
 
@@ -87,6 +92,79 @@ def filter_by_recency(
         filtered.append(r)
 
     return filtered
+
+
+def rank_social_candidates(
+    records: List[NormalizedSocialRecord],
+    query: str,
+) -> List[NormalizedSocialRecord]:
+    """
+    Deterministically rank candidates considering:
+    - Textual relevance (caption, tags, text)
+    - Profile relevance (author username / display name matching query tokens)
+    - Recency (publication recency factor)
+    - Engagement (likes, comments, views)
+    - Discovery position
+    """
+    if not query:
+        return records
+
+    query_lower = query.lower()
+    query_tokens = set(re.findall(r"\w+", query_lower))
+
+    scored: List[tuple[float, NormalizedSocialRecord]] = []
+    now = datetime.datetime.utcnow()
+
+    for idx, r in enumerate(records):
+        # 1. Textual relevance (0.0 to 1.0)
+        text_rel = calculate_lexical_relevance(r, query)
+
+        # 2. Profile relevance (0.0 to 1.0)
+        prof_rel = 0.0
+        author_user = (r.author.username or "").lower()
+        author_name = (r.author.display_name or "").lower()
+        if author_user and any(t in author_user for t in query_tokens):
+            prof_rel = 0.9 if query_lower in author_user else 0.6
+        elif author_name and any(t in author_name for t in query_tokens):
+            prof_rel = 0.8 if query_lower in author_name else 0.5
+
+        # 3. Recency factor (0.2 to 1.0)
+        recency_factor = 0.5
+        pub_dt = parse_iso_datetime(r.published_at)
+        if pub_dt:
+            age_days = max(0, (now - pub_dt).days)
+            if age_days <= 14:
+                recency_factor = 1.0
+            elif age_days <= 60:
+                recency_factor = 0.8
+            elif age_days <= 180:
+                recency_factor = 0.6
+            else:
+                recency_factor = 0.3
+
+        # 4. Engagement factor (0.0 to 1.0 using logarithmic scaling)
+        eng = r.engagement
+        raw_eng = (eng.likes or 0) + (eng.comments or 0) * 3 + (eng.views or 0) // 10
+        eng_factor = min(1.0, math.log10(raw_eng + 1) / 5.0) if raw_eng > 0 else 0.1
+
+        # 5. Position factor (first results get a slight boost, 1.0 down to 0.7)
+        pos_factor = max(0.7, 1.0 - (idx * 0.015))
+
+        # Composite score
+        composite_score = (
+            (text_rel * 0.40)
+            + (prof_rel * 0.25)
+            + (recency_factor * 0.15)
+            + (eng_factor * 0.10)
+            + (pos_factor * 0.10)
+        )
+        r.relevance_score = round(composite_score, 3)
+        scored.append((composite_score, r))
+
+    # Sort descending by composite score
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [r for _, r in scored]
+
 
 
 def calculate_lexical_relevance(record: NormalizedSocialRecord, topic: str) -> float:

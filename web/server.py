@@ -316,11 +316,41 @@ async def history_endpoint(request: Request):
     })
 
 
+async def search_topic_endpoint(request: Request):
+    """Direct API endpoint for search_social_topic tool."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    query = body.get("query", "").strip()
+    platform = body.get("platform", "instagram")
+    top_n = int(body.get("top_n", 20))
+    comments_per_content = int(body.get("comments_per_content", 20))
+    date_from = body.get("date_from")
+    date_to = body.get("date_to")
+    days_back = int(body["days_back"]) if "days_back" in body and body["days_back"] is not None else None
+
+    from server.services.social_intelligence import get_social_intelligence_service
+    srv = get_social_intelligence_service()
+    res = await srv.search_social_topic(
+        query=query,
+        platform=platform,
+        top_n=top_n,
+        comments_per_content=comments_per_content,
+        date_from=date_from,
+        date_to=date_to,
+        days_back=days_back,
+    )
+    return JSONResponse(res)
+
+
 # Starlette app configuration
 routes = [
     Route("/", endpoint=index, methods=["GET"]),
     Route("/api/chat", endpoint=chat_endpoint, methods=["POST"]),
     Route("/api/history", endpoint=history_endpoint, methods=["GET"]),
+    Route("/api/search_topic", endpoint=search_topic_endpoint, methods=["POST"]),
     Mount("/static", app=StaticFiles(directory=STATIC_DIR), name="static"),
 ]
 

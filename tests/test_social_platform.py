@@ -372,3 +372,210 @@ async def test_instagram_provider_abstraction_and_query_discovery():
     with pytest.raises(InstagramValidationError):
         await real_service.search_posts_or_reels(query="   ", max_results=20)
 
+
+def test_rank_social_candidates():
+    """Verify deterministic candidate ranking on textual, profile, engagement, and recency signals."""
+    from server.services.filtering import rank_social_candidates
+    now = datetime.datetime.utcnow().isoformat() + "Z"
+
+    # Candidate A: strong textual match, official username match, high engagement
+    rec_a = NormalizedSocialRecord(
+        record_id="instagram:a",
+        platform="instagram",
+        content_type="reel",
+        source_url="https://www.instagram.com/reel/a/",
+        content_id="a",
+        published_at=now,
+        author=SocialAuthor(username="virat.kohli", display_name="Virat Kohli"),
+        content=SocialContent(caption="Preparation for the big match! #virat #cricket"),
+        engagement=SocialEngagement(likes=100000, comments=5000),
+        metadata=ProvenanceMetadata(source_platform="instagram", source_provider="apify", source_url="https://www.instagram.com/reel/a/", fetched_at=now),
+    )
+
+    # Candidate B: low relevance, completely different topic
+    rec_b = NormalizedSocialRecord(
+        record_id="instagram:b",
+        platform="instagram",
+        content_type="post",
+        source_url="https://www.instagram.com/p/b/",
+        content_id="b",
+        published_at=now,
+        author=SocialAuthor(username="random_cook", display_name="Baking Daily"),
+        content=SocialContent(caption="How to bake sourdough bread step by step #bread"),
+        engagement=SocialEngagement(likes=50, comments=2),
+        metadata=ProvenanceMetadata(source_platform="instagram", source_provider="apify", source_url="https://www.instagram.com/p/b/", fetched_at=now),
+    )
+
+    ranked = rank_social_candidates([rec_b, rec_a], query="Virat")
+    assert ranked[0].content_id == "a"
+    assert ranked[1].content_id == "b"
+    assert (ranked[0].relevance_score or 0) > (ranked[1].relevance_score or 0)
+
+
+def test_filter_by_recency_days_back():
+    """Verify filter_by_recency supports days_back filtering."""
+    now = datetime.datetime.utcnow()
+    recent = (now - datetime.timedelta(days=5)).isoformat() + "Z"
+    old = (now - datetime.timedelta(days=40)).isoformat() + "Z"
+
+    r_recent = NormalizedSocialRecord(
+        record_id="r1", platform="instagram", content_type="reel",
+        source_url="https://instagram.com/r1", content_id="r1", published_at=recent,
+        metadata=ProvenanceMetadata(source_platform="instagram", source_provider="apify", source_url="https://instagram.com/r1", fetched_at=recent),
+    )
+    r_old = NormalizedSocialRecord(
+        record_id="r2", platform="instagram", content_type="reel",
+        source_url="https://instagram.com/r2", content_id="r2", published_at=old,
+        metadata=ProvenanceMetadata(source_platform="instagram", source_provider="apify", source_url="https://instagram.com/r2", fetched_at=old),
+    )
+
+    filtered = filter_by_recency([r_recent, r_old], days_back=10)
+    assert len(filtered) == 1
+    assert filtered[0].content_id == "r1"
+
+
+@pytest.mark.asyncio
+async def test_search_social_topic_end_to_end():
+    """Verify search_social_topic end-to-end orchestration, comment extraction, deduplication, and schema."""
+    from unittest.mock import AsyncMock, MagicMock
+    from server.services.social_intelligence import SocialIntelligenceService
+    from server.models import SocialInteraction
+
+    mock_provider = AsyncMock()
+    mock_provider.is_available = MagicMock(return_value=True)
+
+    # 1. Mock search candidates (including a duplicate ID to test deduplication)
+    now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+    cand_1 = NormalizedSocialRecord(
+        record_id="instagram:post_100",
+        platform="instagram",
+        content_type="reel",
+        source_url="https://www.instagram.com/reel/post_100/",
+        content_id="post_100",
+        published_at=now_iso,
+        author=SocialAuthor(username="virat.kohli", user_id="1818", display_name="Virat Kohli", profile_url="https://www.instagram.com/virat.kohli/"),
+        content=SocialContent(caption="Training day! Consistency is key #virat"),
+        engagement=SocialEngagement(likes=250000, comments=1500),
+        metadata=ProvenanceMetadata(source_platform="instagram", source_provider="apify", source_url="https://www.instagram.com/reel/post_100/", fetched_at=now_iso),
+    )
+    cand_dup = cand_1.model_copy()
+
+    mock_provider.search_content.return_value = [cand_1, cand_dup]
+
+    # 2. Mock comments
+    mock_provider.get_comments.return_value = [
+        SocialInteraction(
+            interaction_id="c_99",
+            type="comment",
+            text="Incredible dedication!",
+            author=SocialAuthor(username="fan_girl_01", user_id="888", display_name="Ananya", profile_url="https://www.instagram.com/fan_girl_01/"),
+            created_at=now_iso,
+            likes=42,
+        ),
+        # Duplicate comment to test comment deduplication
+        SocialInteraction(
+            interaction_id="c_99",
+            type="comment",
+            text="Incredible dedication!",
+            author=SocialAuthor(username="fan_girl_01", user_id="888"),
+            created_at=now_iso,
+            likes=42,
+        ),
+    ]
+
+    mock_registry = MagicMock()
+    mock_registry.get_provider.return_value = mock_provider
+
+    service = SocialIntelligenceService(registry=mock_registry)
+    result = await service.search_social_topic(
+        query="Virat",
+        platform="instagram",
+        top_n=5,
+        comments_per_content=5,
+        auto_store=False,
+    )
+
+    assert result["status"] == "success"
+    assert result["query"] == "Virat"
+    assert result["platform"] == "instagram"
+    assert result["total_found"] == 1  # Deduplicated from 2 to 1
+    assert len(result["results"]) == 1
+
+    post_res = result["results"][0]
+    assert post_res["rank"] == 1
+    assert post_res["content_id"] == "post_100"
+    assert post_res["author"]["username"] == "virat.kohli"
+    assert post_res["author"]["user_id"] == "1818"
+    assert post_res["author"]["profile_url"] == "https://www.instagram.com/virat.kohli/"
+    assert post_res["engagement"]["likes"] == 250000
+    assert post_res["source"]["provider"] == "apify"
+    assert post_res["source"]["query"] == "Virat"
+
+    # Verify comments normalization and deduplication
+    assert len(post_res["comments"]) == 1  # Deduplicated from 2 to 1
+    comm = post_res["comments"][0]
+    assert comm["comment_id"] == "c_99"
+    assert comm["text"] == "Incredible dedication!"
+    assert comm["author"]["username"] == "fan_girl_01"
+    assert comm["author"]["user_id"] == "888"
+    assert comm["author"]["profile_url"] == "https://www.instagram.com/fan_girl_01/"
+    assert comm["likes"] == 42
+
+
+@pytest.mark.asyncio
+async def test_search_social_topic_validation_and_error_handling():
+    """Verify clean error handling for empty query, unavailable provider, and rate limiting."""
+    from unittest.mock import AsyncMock, MagicMock
+    from server.services.social_intelligence import SocialIntelligenceService
+    from server.providers.apify import ApifyRateLimitError
+
+    service = SocialIntelligenceService()
+
+    # 1. Empty query
+    res_empty = await service.search_social_topic(query="   ", platform="instagram")
+    assert res_empty["status"] == "error"
+    assert res_empty["error_type"] == "invalid_query"
+
+    # 2. Unknown platform
+    res_unknown = await service.search_social_topic(query="fitness", platform="unknown_platform")
+    assert res_unknown["status"] == "error"
+    assert res_unknown["error_type"] == "provider_unavailable"
+
+    # 3. Rate limiting error
+    mock_provider = AsyncMock()
+    mock_provider.is_available = MagicMock(return_value=True)
+    mock_provider.search_content.side_effect = ApifyRateLimitError("Rate limit exceeded on Apify Actor")
+
+    mock_registry = MagicMock()
+    mock_registry.get_provider.return_value = mock_provider
+
+    service_with_mock = SocialIntelligenceService(registry=mock_registry)
+    res_rate_limit = await service_with_mock.search_social_topic(query="fitness", platform="instagram")
+    assert res_rate_limit["status"] == "error"
+    assert res_rate_limit["error_type"] == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_search_social_topic_mcp_tool_invocation():
+    """Verify the search_social_topic tool registered on the FastMCP server works properly."""
+    from unittest.mock import AsyncMock, patch
+    import server.server as server
+
+    mock_res = {
+        "status": "success",
+        "query": "mental health",
+        "platform": "instagram",
+        "total_found": 1,
+        "results": [],
+    }
+
+    with patch.object(server.social_service, "search_social_topic", new=AsyncMock(return_value=mock_res)):
+        out = await server.search_social_topic(
+            query="mental health",
+            platform="instagram",
+            top_n=10,
+        )
+        assert out["status"] == "success"
+        assert out["query"] == "mental health"
+
+
