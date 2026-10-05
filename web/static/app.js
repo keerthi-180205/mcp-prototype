@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="pipeline-steps">
                             <div class="step-item active">
                                 <span class="step-bullet"></span>
-                                <span>Discovering relevant public Instagram Reels (stress, anxiety, pressure)...</span>
+                                <span>Discovering relevant public Instagram Reels for target topic...</span>
                             </div>
                             <div class="step-item active">
                                 <span class="step-bullet"></span>
@@ -132,7 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div class="step-item active">
                                 <span class="step-bullet"></span>
-                                <span>Filtering mental-health relevant discussions & storing in SQLite...</span>
+                                <span>Filtering relevant discussions & storing in SQLite with deduplication...</span>
                             </div>
                         </div>
                     </div>
@@ -213,8 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             <strong>${totalComments}</strong>
                         </div>
                         <div class="stat-chip">
-                            <span>Target Filter</span>
-                            <strong style="color: #f472b6;">Mental Health</strong>
+                            <span>Target Subject</span>
+                            <strong style="color: #f472b6;">${escapeHtml(data.topic || 'Custom Subject')}</strong>
                         </div>
                     </div>
 

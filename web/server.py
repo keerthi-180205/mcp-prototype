@@ -1,11 +1,21 @@
-"""Web Application & Chatbot Server for Instagram Social Intelligence & Outreach."""
+"""Universal Web Application & Chatbot Server for Multi-Topic Social Intelligence & Outreach.
+
+Supports ANY subject/topic:
+- Mental health, stress, anxiety
+- Ebook selling & digital products
+- Video editing & creative services
+- AI tools & software
+- Fitness & bodybuilding
+- Freelancing & marketing
+- Any custom user-provided topic!
+"""
 
 import json
 import logging
 import os
 import re
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from dotenv import load_dotenv
 
@@ -38,100 +48,141 @@ logging.basicConfig(level=logging.INFO)
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
-# Mental health & subtopic keyword classifiers
-MENTAL_HEALTH_KEYWORDS = [
-    "mental health", "stress", "anxiety", "anxious", "work pressure", "burnout",
-    "exam tension", "exam", "depression", "panic", "overwhelmed", "therapy",
-    "crying", "mental", "exhausted", "tired", "pressure", "healing", "coping",
-    "mindset", "self care", "peace", "alone", "breathe", "tension", "struggle",
-]
+
+def extract_topic_from_prompt(user_query: str) -> Tuple[str, str, str]:
+    """
+    Extract the clean target subject/topic, hashtag search key, and target platform from a natural language prompt.
+    Returns: (display_topic, search_tag, platform)
+    """
+    q = user_query.strip().lower()
+    platform = "instagram"
+    if "youtube" in q:
+        platform = "youtube"
+    elif "github" in q:
+        platform = "github"
+
+    # Common topic mappings to optimal Instagram exploration tags
+    if "mental health" in q:
+        return "Mental Health", "mentalhealth", platform
+    elif "stress" in q:
+        return "Stress Relief", "stressrelief", platform
+    elif "anxiety" in q:
+        return "Anxiety Relief", "anxietyrelief", platform
+    elif "exam" in q:
+        return "Exam Tension", "examstress", platform
+    elif "work pressure" in q or "burnout" in q:
+        return "Work Pressure", "burnout", platform
+    elif "ebook" in q:
+        return "Ebook Selling", "ebookselling", platform
+    elif "video edit" in q or "video editor" in q:
+        return "Video Editing", "videoediting", platform
+    elif "ai tool" in q or "ai tools" in q or "artificial intelligence" in q:
+        return "AI Tools", "aitools", platform
+    elif "fitness" in q or "workout" in q or "gym" in q:
+        return "Fitness & Health", "fitness", platform
+    elif "freelanc" in q:
+        return "Freelancing", "freelancing", platform
+    elif "marketing" in q:
+        return "Marketing", "marketing", platform
+    elif "real estate" in q:
+        return "Real Estate", "realestate", platform
+
+    # Generic extraction: remove conversational stopwords
+    stop_words = {
+        "i", "want", "data", "from", "on", "about", "instagram", "reels", "reel",
+        "posts", "post", "comments", "comment", "find", "search", "the", "a", "an",
+        "who", "commented", "what", "they", "said", "and", "for", "get", "collect",
+        "show", "me", "look", "fetch", "extract", "public", "user", "users", "ids",
+        "handles", "recent"
+    }
+    tokens = [w for w in re.findall(r"\w+", q) if w not in stop_words]
+
+    if not tokens:
+        return "Trending", "trending", platform
+
+    display_topic = " ".join(tokens).title()
+    search_tag = "".join(tokens).lower()
+    return display_topic, search_tag, platform
 
 
-def classify_comment(text: str, reel_caption: str = "") -> str:
-    """Classify comment into specific mental health categories (work pressure, exam tension, anxiety, stress)."""
-    full_text = f"{text} {reel_caption}".lower()
+def dynamic_comment_intent(comment_text: str, topic: str, caption: str = "") -> str:
+    """
+    Dynamically classify user comments across any topic into intent categories:
+    - Inquiries / Purchase / Questions
+    - Pain Points & Struggles
+    - Feedback / Endorsements / Praise
+    - Tips & Method Discussion
+    """
+    text_lower = comment_text.lower()
 
-    if re.search(r"\b(exam|exams|test|tests|study|studying|student|students|marks|grade|college|school|cgpa|pass|fail|finals)\b", full_text):
-        return "Exam Tension & Students"
-    elif re.search(r"\b(work|job|boss|corporate|office|burnout|shift|salary|colleague|colleagues|deadline|career|hustle)\b", full_text):
-        return "Work Pressure & Burnout"
-    elif re.search(r"\b(anxiety|anxious|panic|attack|overthinking|fear|nervous|heart racing|scared)\b", full_text):
-        return "Anxiety & Panic"
-    elif re.search(r"\b(stress|stressed|pressure|overwhelmed|headache|exhausted|tired|crying|breakdown)\b", full_text):
-        return "Stress & Coping"
+    if re.search(r"\b(how much|cost|price|where to buy|link|dm me|info|interested|guide|how can i|available|order|purchase|how to)\b", text_lower):
+        return "Inquiry & Interest"
+    elif re.search(r"\b(struggling|hard|difficult|fail|confused|problem|tired|issue|cannot|can't|hate|stuck|anxiety|stress|pressure|burnout)\b", text_lower):
+        return "Pain Point & Struggle"
+    elif re.search(r"\b(love|great|awesome|helpful|works|best|thank you|thanks|agreed|true|fact|fire|gem|100%|accurate)\b", text_lower):
+        return "Praise & Feedback"
+    elif re.search(r"\b(tutorial|tool|app|software|technique|method|strategy|workflow|tips|advice|secret)\b", text_lower):
+        return "Tips & Method"
     else:
-        return "Mental Health Discussion"
-
-
-def is_mental_health_related(text: str, reel_caption: str = "") -> bool:
-    """Filter to ensure the comment or reel context relates to mental health / emotional well-being."""
-    full = f"{text} {reel_caption}".lower()
-    return any(kw in full for kw in MENTAL_HEALTH_KEYWORDS) or len(text.split()) > 3
+        short_topic = topic.split()[0].title() if topic else "Topic"
+        return f"{short_topic} Discussion"
 
 
 async def index(request: Request):
-    """Serve the chatbot single-page application."""
+    """Serve the universal chatbot SPA."""
     index_file = os.path.join(STATIC_DIR, "index.html")
     return FileResponse(index_file)
 
 
 async def chat_endpoint(request: Request):
     """
-    Chatbot API endpoint.
-    Searches Instagram reels on requested topics (stress, anxiety, exam tension, work pressure),
-    extracts public commenter handles + comments, filters for mental health, and returns structured data.
+    Universal Chatbot endpoint.
+    Accepts ANY subject (Ebook selling, AI tools, Video editors, Fitness, Mental health, etc.).
+    Extracts public reels, navigates to comment sections, collects commenter IDs & exact comments.
     """
     try:
         body = await request.json()
     except Exception:
         body = {}
 
-    user_query = body.get("query", "mental health").strip()
+    user_query = body.get("query", "").strip()
+    if not user_query:
+        return JSONResponse({"status": "error", "message": "Query cannot be empty."}, status_code=400)
+
     max_reels = min(int(body.get("max_reels", 2)), 5)
-    max_comments = min(int(body.get("max_comments_per_reel", 10)), 25)
+    max_comments = min(int(body.get("max_comments_per_reel", 10)), 30)
 
-    logger.info("Processing chat query: %r (max_reels=%d, max_comments=%d)", user_query, max_reels, max_comments)
-
-    # 1. Determine Instagram search topic from user prompt
-    search_term = "mental health"
-    q_lower = user_query.lower()
-    if "exam" in q_lower or "student" in q_lower:
-        search_term = "exam tension"
-    elif "work" in q_lower or "burnout" in q_lower or "corporate" in q_lower:
-        search_term = "work pressure"
-    elif "anxiety" in q_lower:
-        search_term = "anxiety relief"
-    elif "stress" in q_lower:
-        search_term = "stress relief"
-    elif user_query:
-        # Clean custom query
-        clean = re.sub(r"(find|search|collect|get|instagram|reels|comments|data|from|about|with)", "", user_query, flags=re.I).strip()
-        if clean:
-            search_term = clean
+    # 1. Dynamically extract subject and search tag
+    display_topic, search_tag, platform = extract_topic_from_prompt(user_query)
+    logger.info("Universal request: raw_query=%r -> display=%r, search_tag=%r, platform=%r", user_query, display_topic, search_tag, platform)
 
     service: InstagramService = get_instagram_service()
 
     try:
-        # Search public Instagram Reels
+        # Search public Instagram Reels for this tag
         discovered_posts = await service.search_posts_or_reels(
-            query=search_term,
+            query=search_tag,
             max_results=max_reels,
         )
     except Exception as e:
-        logger.error("Error searching Instagram reels: %s", e)
+        logger.error("Error searching Instagram reels for topic %r: %s", search_tag, e)
         return JSONResponse({
             "status": "error",
-            "message": f"Failed to search Instagram reels via Apify: {str(e)}",
+            "message": f"Failed to acquire Instagram data for '{display_topic}': {str(e)}",
         }, status_code=500)
 
     extracted_comments: List[Dict[str, Any]] = []
     normalized_records: List[NormalizedSocialRecord] = []
 
-    # 2. Iterate each discovered reel and fetch public comment section
+    # 2. Extract public comments and commenter profiles from each reel
     for post in discovered_posts:
         reel_url = post.url
         reel_caption = post.caption or ""
         shortcode = post.content_id or reel_url.rstrip("/").split("/")[-1]
+
+        # Skip explore tag pages if any slipped through
+        if "/explore/tags/" in reel_url:
+            continue
 
         try:
             comments_res = await service.get_post_comments(
@@ -153,14 +204,14 @@ async def chat_endpoint(request: Request):
             username = c.user.username if c.user and c.user.username else "instagram_user"
             user_id = c.user.id if c.user and c.user.id else None
             is_verified = c.user.is_verified if c.user else False
-            category = classify_comment(comment_text, reel_caption)
+            intent_label = dynamic_comment_intent(comment_text, topic=display_topic, caption=reel_caption)
 
             extracted_item = {
                 "user_handle": username,
                 "user_id": user_id,
                 "is_verified": is_verified,
                 "comment_text": comment_text,
-                "category": category,
+                "category": intent_label,
                 "likes": c.like_count,
                 "created_at": c.created_at,
                 "post_url": reel_url,
@@ -184,7 +235,7 @@ async def chat_endpoint(request: Request):
                 )
             )
 
-        # Build normalized record for storage
+        # Build normalized social record
         now_iso = os.popen("date -u +'%Y-%m-%dT%H:%M:%SZ'").read().strip()
         record = NormalizedSocialRecord(
             record_id=f"instagram:{shortcode}",
@@ -224,23 +275,26 @@ async def chat_endpoint(request: Request):
         except Exception as e:
             logger.warning("Failed to persist to SQLite: %s", e)
 
+    valid_reels_count = len([p for p in discovered_posts if "/explore/tags/" not in p.url])
     summary_msg = (
-        f"Analyzed {len(discovered_posts)} Instagram reel(s) related to '{search_term}'. "
-        f"Extracted {len(extracted_comments)} public comments and user handles."
+        f"Searched Instagram for '{display_topic}' (tag #{search_tag}). "
+        f"Discovered {valid_reels_count} reel(s) and extracted {len(extracted_comments)} "
+        f"public commenter user handle(s) and their exact comments."
     )
 
     return JSONResponse({
         "status": "success",
         "query": user_query,
-        "search_term": search_term,
+        "topic": display_topic,
+        "search_tag": search_tag,
         "summary_message": summary_msg,
-        "reels_analyzed": len(discovered_posts),
+        "reels_analyzed": valid_reels_count,
         "comments": extracted_comments,
     })
 
 
 async def history_endpoint(request: Request):
-    """Retrieve historical stored comments and commenters from SQLite."""
+    """Retrieve historical stored comments and commenters across all topics."""
     records = get_social_records(platform="instagram", limit=50)
     comments = []
     for r in records:
@@ -249,7 +303,7 @@ async def history_endpoint(request: Request):
                 "user_handle": i.author.username,
                 "user_id": i.author.user_id,
                 "comment_text": i.text,
-                "category": classify_comment(i.text),
+                "category": dynamic_comment_intent(i.text, topic=r.platform),
                 "likes": i.likes or 0,
                 "created_at": i.created_at,
                 "post_url": r.source_url,
@@ -280,6 +334,6 @@ if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", 8080))
     print(f"\n=======================================================")
-    print(f"🚀 SocialReach AI Chatbot running at: http://localhost:{port}")
+    print(f"🚀 Universal Social Intelligence Chatbot running at: http://localhost:{port}")
     print(f"=======================================================\n")
     uvicorn.run(app, host="0.0.0.0", port=port)

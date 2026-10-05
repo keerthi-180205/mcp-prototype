@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Social Intelligence AI - Instagram Outreach & Comment Extraction</title>
+    <title>Universal Social Intelligence & Outreach Chatbot</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -22,40 +22,54 @@
                     </svg>
                 </div>
                 <div>
-                    <h2>SocialReach AI</h2>
-                    <span class="badge-mcp">Universal Intelligence MCP</span>
+                    <h2>Universal Social AI</h2>
+                    <span class="badge-mcp">Multi-Subject Outreach MCP</span>
                 </div>
             </div>
 
             <div class="sidebar-section">
-                <label class="section-label">Quick Presets</label>
+                <label class="section-label">Example Use Cases</label>
                 <div class="presets-list">
-                    <button class="preset-btn" data-query="Find recent Instagram reels about mental health and extract commenter IDs and what they commented">
+                    <button class="preset-btn" data-query="Find Instagram reels about ebook selling, extract commenter IDs and what they commented">
+                        <span class="icon">📖</span>
+                        <div>
+                            <strong>Ebook Selling</strong>
+                            <small>Find leads & buyer questions</small>
+                        </div>
+                    </button>
+                    <button class="preset-btn" data-query="Search Instagram reels for video editors and video editing services, collect who commented and their exact comments">
+                        <span class="icon">🎬</span>
+                        <div>
+                            <strong>Video Editing</strong>
+                            <small>Creator & client outreach</small>
+                        </div>
+                    </button>
+                    <button class="preset-btn" data-query="Find Instagram reels about AI tools and workflow automation, collect commenter user IDs and their actual comments">
+                        <span class="icon">🤖</span>
+                        <div>
+                            <strong>AI Tools & Software</strong>
+                            <small>Tech enthusiasts & adopters</small>
+                        </div>
+                    </button>
+                    <button class="preset-btn" data-query="Search Instagram reels for fitness, workout routines, and diet tips, collect commenter handles and comments">
+                        <span class="icon">🏋️</span>
+                        <div>
+                            <strong>Fitness & Health</strong>
+                            <small>Gym & nutrition discussions</small>
+                        </div>
+                    </button>
+                    <button class="preset-btn" data-query="Find Instagram reels discussing mental health, stress, and anxiety, and extract commenter IDs and their exact comments">
                         <span class="icon">🧠</span>
                         <div>
-                            <strong>Mental Health Overview</strong>
-                            <small>Explore reels & public comments</small>
+                            <strong>Mental Health</strong>
+                            <small>Stress & anxiety discussions</small>
                         </div>
                     </button>
-                    <button class="preset-btn" data-query="Find Instagram reels discussing stress and anxiety, and collect user insta IDs with their exact comments">
-                        <span class="icon">⚡</span>
-                        <div>
-                            <strong>Stress & Anxiety</strong>
-                            <small>Extract coping & trigger comments</small>
-                        </div>
-                    </button>
-                    <button class="preset-btn" data-query="Collect Instagram reels and public comments on work pressure and corporate burnout with commenter usernames">
+                    <button class="preset-btn" data-query="Search Instagram reels about freelancing and client acquisition, collect commenter usernames and what they said">
                         <span class="icon">💼</span>
                         <div>
-                            <strong>Work Pressure & Burnout</strong>
-                            <small>Corporate stress discussions</small>
-                        </div>
-                    </button>
-                    <button class="preset-btn" data-query="Search Instagram reels for exam tension and student stress, fetch who commented and their exact comment text">
-                        <span class="icon">📚</span>
-                        <div>
-                            <strong>Exam Tension & Students</strong>
-                            <small>Academic pressure discussions</small>
+                            <strong>Freelancing & Agency</strong>
+                            <small>Client outreach & problems</small>
                         </div>
                     </button>
                 </div>
@@ -86,7 +100,7 @@
             <div class="sidebar-footer">
                 <div class="status-indicator">
                     <span class="pulse-dot"></span>
-                    <span>MCP Server & Apify Ready</span>
+                    <span>Universal Capability Engine Active</span>
                 </div>
             </div>
         </aside>
@@ -95,8 +109,8 @@
         <main class="chat-main">
             <header class="chat-header">
                 <div>
-                    <h1>Instagram Intelligence & Outreach Chatbot</h1>
-                    <p>Discover public reels, extract commenter Instagram IDs, and analyze comments specifically related to mental health</p>
+                    <h1>Universal Social Intelligence & Outreach Chatbot</h1>
+                    <p>Enter <strong>any topic</strong> &bull; Discovers public reels &bull; Collects user Instagram IDs &bull; Extracts exact comments</p>
                 </div>
                 <div class="header-actions">
                     <button id="exportCsvBtn" class="btn-secondary" style="display: none;">
@@ -112,16 +126,19 @@
                     <div class="avatar">AI</div>
                     <div class="message-content">
                         <div class="message-bubble">
-                            <h3>👋 Welcome to SocialReach Intelligence!</h3>
-                            <p>I can search public <strong>Instagram Reels</strong>, navigate into the comment threads, and collect <strong>commenter Instagram IDs</strong> along with <strong>what they actually commented</strong>, filtered specifically for mental health discussions:</p>
+                            <h3>👋 Welcome! What topic do you want to explore?</h3>
+                            <p>This platform is <strong>completely generic and topic-agnostic</strong>. You can ask for public Instagram data on <strong>any subject</strong>. The system searches matching reels, goes into the comment section, and returns the <strong>commenter Instagram IDs</strong> along with <strong>what they actually commented</strong>:</p>
                             <div class="topic-chips">
+                                <span class="chip">📖 Ebook Selling</span>
+                                <span class="chip">🎬 Video Editors</span>
+                                <span class="chip">🤖 AI Tools</span>
+                                <span class="chip">🏋️ Fitness</span>
                                 <span class="chip">🧠 Mental Health</span>
-                                <span class="chip">⚡ Stress & Relief</span>
-                                <span class="chip">😰 Anxiety & Panic</span>
-                                <span class="chip">💼 Work Pressure</span>
-                                <span class="chip">📚 Exam Tension</span>
+                                <span class="chip">💼 Freelancing</span>
+                                <span class="chip">📈 Marketing</span>
+                                <span class="chip">✨ Any Custom Topic</span>
                             </div>
-                            <p class="hint-text">Type what you are looking for below or click any preset in the sidebar to run the pipeline.</p>
+                            <p class="hint-text">Type your query below (e.g. <em>"Find reels on ebook selling and show who commented"</em>) or click any preset in the sidebar.</p>
                         </div>
                     </div>
                 </div>
@@ -134,7 +151,7 @@
                         <textarea 
                             id="queryInput" 
                             rows="1" 
-                            placeholder="Ask me: 'I want mental health care data from Instagram reels on stress, anxiety, or exam tension...'" 
+                            placeholder="Enter any topic: 'Find reels on ebook selling', 'video editing services', 'AI tools', 'mental health'..." 
                             required
                         ></textarea>
                         <button type="submit" id="sendBtn" class="send-btn" title="Send Request">
@@ -146,7 +163,7 @@
                     </div>
                 </form>
                 <div class="input-subtext">
-                    🔒 Public interactions only. Compliant with platform terms. Respects privacy and data minimization.
+                    🔒 Public interactions only. Extracts commenter Instagram ID and exact public comment text.
                 </div>
             </footer>
         </main>
