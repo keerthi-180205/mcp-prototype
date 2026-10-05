@@ -495,3 +495,15 @@ class InstagramService:
             platform="instagram",
             results=topic_results,
         )
+
+
+_instagram_service_instance: Optional[InstagramService] = None
+
+
+def get_instagram_service() -> InstagramService:
+    """Singleton accessor for InstagramService."""
+    global _instagram_service_instance
+    if _instagram_service_instance is None:
+        _instagram_service_instance = InstagramService()
+    return _instagram_service_instance
+
