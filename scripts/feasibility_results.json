@@ -1,0 +1,1342 @@
+[
+  {
+    "repository": "DominicT1995/EDA-Social-Media-Mental-Health",
+    "url": "https://github.com/DominicT1995/EDA-Social-Media-Mental-Health",
+    "description": "Exploratory data analysis seeking to utilize available survey datasets to confirm hypothesis that increased social media usage hours leads to an increase in self-reported indicators of anxiety and depression.",
+    "stars": 2,
+    "pushed_at": "2024-02-14T23:17:26Z",
+    "updated_at": "2024-11-29T16:04:05Z",
+    "queries": [
+      "mental health social media dataset"
+    ],
+    "readme_len": 9964,
+    "actual_records_hint": true,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": true,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "EDA-Social-Media-Mental-Health",
+        "description": "Exploratory data analysis seeking to utilize available survey datasets to confirm hypothesis that increased social media usage hours leads to an increase in self-reported indicators of anxiety and depression.",
+        "data_type": "mental_health_assessment",
+        "source_repository": "DominicT1995/EDA-Social-Media-Mental-Health",
+        "source_repository_url": "https://github.com/DominicT1995/EDA-Social-Media-Mental-Health",
+        "dataset_url": "https://github.com/DominicT1995/EDA-Social-Media-Mental-Health",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "boxcode59-source/MentalHealth-Social-Media-Multimodal-Dataset",
+    "url": "https://github.com/boxcode59-source/MentalHealth-Social-Media-Multimodal-Dataset",
+    "description": "MentalHealth Social Media Multimodal Dataset",
+    "stars": 0,
+    "pushed_at": "2026-07-07T11:56:14Z",
+    "updated_at": "2026-07-07T11:56:19Z",
+    "queries": [
+      "mental health social media dataset"
+    ],
+    "readme_len": 92,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "MentalHealth-Social-Media-Multimodal-Dataset",
+        "description": "MentalHealth Social Media Multimodal Dataset",
+        "data_type": "text",
+        "source_repository": "boxcode59-source/MentalHealth-Social-Media-Multimodal-Dataset",
+        "source_repository_url": "https://github.com/boxcode59-source/MentalHealth-Social-Media-Multimodal-Dataset",
+        "dataset_url": "https://github.com/boxcode59-source/MentalHealth-Social-Media-Multimodal-Dataset",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "bbjonah/Mental-Health-Trend-Detection-from-Social-Media",
+    "url": "https://github.com/bbjonah/Mental-Health-Trend-Detection-from-Social-Media",
+    "description": "This project analyzes mental health trends on social media using a 10,000-post synthetic dataset. It applies NLP and machine learning to classify posts as normal or distress, then tracks time-based patterns to reveal evolving mental health signals while maintaining full ethical compliance with no real user data.",
+    "stars": 2,
+    "pushed_at": "2026-08-26T15:24:54Z",
+    "updated_at": "2026-08-26T15:31:01Z",
+    "queries": [
+      "mental health social media dataset"
+    ],
+    "readme_len": 3733,
+    "actual_records_hint": true,
+    "has_post_text": true,
+    "has_username": true,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": true,
+    "license": null,
+    "privacy_statuses": [
+      "contains_sensitive_data_warning"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Mental-Health-Trend-Detection-from-Social-Media",
+        "description": "This project analyzes mental health trends on social media using a 10,000-post synthetic dataset. It applies NLP and machine learning to classify posts as normal or distress, then tracks time-based patterns to reveal evolving mental health signals while maintaining full ethical compliance with no real user data.",
+        "data_type": "text",
+        "source_repository": "bbjonah/Mental-Health-Trend-Detection-from-Social-Media",
+        "source_repository_url": "https://github.com/bbjonah/Mental-Health-Trend-Detection-from-Social-Media",
+        "dataset_url": "https://github.com/bbjonah/Mental-Health-Trend-Detection-from-Social-Media",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "contains_sensitive_data_warning",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "samuelady/datasetMentalHealthSocialMedia",
+    "url": "https://github.com/samuelady/datasetMentalHealthSocialMedia",
+    "description": null,
+    "stars": 0,
+    "pushed_at": "2024-10-14T06:24:15Z",
+    "updated_at": "2024-10-14T06:24:15Z",
+    "queries": [
+      "mental health social media dataset"
+    ],
+    "readme_len": 0,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "boxcode59-source/Mental-Health-Social-Media-Multimodal-Dataset",
+    "url": "https://github.com/boxcode59-source/Mental-Health-Social-Media-Multimodal-Dataset",
+    "description": "Mental Health Social Media Multimodal Dataset",
+    "stars": 0,
+    "pushed_at": "2026-07-14T08:27:27Z",
+    "updated_at": "2026-07-14T08:27:31Z",
+    "queries": [
+      "mental health social media dataset"
+    ],
+    "readme_len": 94,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Mental-Health-Social-Media-Multimodal-Dataset",
+        "description": "Mental Health Social Media Multimodal Dataset",
+        "data_type": "text",
+        "source_repository": "boxcode59-source/Mental-Health-Social-Media-Multimodal-Dataset",
+        "source_repository_url": "https://github.com/boxcode59-source/Mental-Health-Social-Media-Multimodal-Dataset",
+        "dataset_url": "https://github.com/boxcode59-source/Mental-Health-Social-Media-Multimodal-Dataset",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "rishikagupta2468/mentalHealth",
+    "url": "https://github.com/rishikagupta2468/mentalHealth",
+    "description": "Used Natural Language Processing over the text of tweets of Twitter users, across various parameters like geographies, time, etc. to detect whether suicidal ideation is present or not. Create our own dataset with the latest tweets by collecting them from Twitter. We decided some parameters across which we wanted to compare and analyse the results of detected behaviour, example across locations/geographies.",
+    "stars": 4,
+    "pushed_at": "2023-05-06T07:33:22Z",
+    "updated_at": "2026-06-04T13:47:36Z",
+    "queries": [
+      "mental health Twitter dataset"
+    ],
+    "readme_len": 41,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "mentalHealth",
+        "description": "Used Natural Language Processing over the text of tweets of Twitter users, across various parameters like geographies, time, etc. to detect whether suicidal ideation is present or not. Create our own dataset with the latest tweets by collecting them from Twitter. We decided some parameters across which we wanted to compare and analyse the results of detected behaviour, example across locations/geographies.",
+        "data_type": "text",
+        "source_repository": "rishikagupta2468/mentalHealth",
+        "source_repository_url": "https://github.com/rishikagupta2468/mentalHealth",
+        "dataset_url": "https://github.com/rishikagupta2468/mentalHealth",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "hiracse091/twitter-mentalhealth-mentalbert",
+    "url": "https://github.com/hiracse091/twitter-mentalhealth-mentalbert",
+    "description": "This is a class project. Classify mental health symptoms using LLM form twitter dataset",
+    "stars": 0,
+    "pushed_at": "2025-04-23T14:08:28Z",
+    "updated_at": "2025-04-23T14:08:31Z",
+    "queries": [
+      "mental health Twitter dataset"
+    ],
+    "readme_len": 122,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "twitter-mentalhealth-mentalbert",
+        "description": "This is a class project. Classify mental health symptoms using LLM form twitter dataset",
+        "data_type": "text",
+        "source_repository": "hiracse091/twitter-mentalhealth-mentalbert",
+        "source_repository_url": "https://github.com/hiracse091/twitter-mentalhealth-mentalbert",
+        "dataset_url": "https://github.com/hiracse091/twitter-mentalhealth-mentalbert",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "dadler6/MH_Twitter",
+    "url": "https://github.com/dadler6/MH_Twitter",
+    "description": "Playground for looking at mental health through Twitter datasets.",
+    "stars": 0,
+    "pushed_at": "2018-08-14T03:26:45Z",
+    "updated_at": "2018-08-14T03:26:45Z",
+    "queries": [
+      "mental health Twitter dataset"
+    ],
+    "readme_len": 0,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "imo27/Mental-Health-Covid-19-Dataset",
+    "url": "https://github.com/imo27/Mental-Health-Covid-19-Dataset",
+    "description": "Covid-19 Mental Health Dataset is a dataset derived from twitter and its composition is made from the tweets of many users concerning topics related to mental health during the current Covid-19 Global Pandemic. ",
+    "stars": 0,
+    "pushed_at": "2021-12-31T17:48:37Z",
+    "updated_at": "2021-12-31T17:48:39Z",
+    "queries": [
+      "mental health Twitter dataset"
+    ],
+    "readme_len": 9986,
+    "actual_records_hint": true,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": true,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Mental-Health-Covid-19-Dataset",
+        "description": "Covid-19 Mental Health Dataset is a dataset derived from twitter and its composition is made from the tweets of many users concerning topics related to mental health during the current Covid-19 Global Pandemic. ",
+        "data_type": "text",
+        "source_repository": "imo27/Mental-Health-Covid-19-Dataset",
+        "source_repository_url": "https://github.com/imo27/Mental-Health-Covid-19-Dataset",
+        "dataset_url": "https://github.com/imo27/Mental-Health-Covid-19-Dataset",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "PunuNGowda/Social_Media_Impact_on_Mental_Health",
+    "url": "https://github.com/PunuNGowda/Social_Media_Impact_on_Mental_Health",
+    "description": "Sentiment analysis of Twitter data (Tweets and Replies datasets) to study social-media impact on mental health.",
+    "stars": 0,
+    "pushed_at": "2024-08-28T08:27:30Z",
+    "updated_at": "2026-09-22T18:35:23Z",
+    "queries": [
+      "mental health Twitter dataset"
+    ],
+    "readme_len": 2721,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": "MIT",
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Social_Media_Impact_on_Mental_Health",
+        "description": "Sentiment analysis of Twitter data (Tweets and Replies datasets) to study social-media impact on mental health.",
+        "data_type": "emotion",
+        "source_repository": "PunuNGowda/Social_Media_Impact_on_Mental_Health",
+        "source_repository_url": "https://github.com/PunuNGowda/Social_Media_Impact_on_Mental_Health",
+        "dataset_url": "https://github.com/PunuNGowda/Social_Media_Impact_on_Mental_Health",
+        "source_platform": "GitHub",
+        "license": "MIT",
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "seoyunion/RedditMentalhealth",
+    "url": "https://github.com/seoyunion/RedditMentalhealth",
+    "description": "Reddit dataset (mental health related subreddits)",
+    "stars": 3,
+    "pushed_at": "2023-07-20T06:58:21Z",
+    "updated_at": "2026-04-20T04:27:46Z",
+    "queries": [
+      "mental health Reddit dataset"
+    ],
+    "readme_len": 1363,
+    "actual_records_hint": true,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "RedditMentalhealth",
+        "description": "Reddit dataset (mental health related subreddits)",
+        "data_type": "text",
+        "source_repository": "seoyunion/RedditMentalhealth",
+        "source_repository_url": "https://github.com/seoyunion/RedditMentalhealth",
+        "dataset_url": "https://github.com/seoyunion/RedditMentalhealth",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "GerryFAN0706/mentalreddit",
+    "url": "https://github.com/GerryFAN0706/mentalreddit",
+    "description": "mental health reddit dataset ",
+    "stars": 0,
+    "pushed_at": "2026-01-29T07:01:03Z",
+    "updated_at": "2026-01-29T07:01:15Z",
+    "queries": [
+      "mental health Reddit dataset"
+    ],
+    "readme_len": 0,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "ravindrg-bit/Reddit_Mental",
+    "url": "https://github.com/ravindrg-bit/Reddit_Mental",
+    "description": "Reddit Mental Health Dataset and analysis",
+    "stars": 0,
+    "pushed_at": "2026-04-07T03:44:57Z",
+    "updated_at": "2026-04-07T03:45:02Z",
+    "queries": [
+      "mental health Reddit dataset"
+    ],
+    "readme_len": 0,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Disha-Sachdeva/Reddit-Mental-health-Dashboard",
+    "url": "https://github.com/Disha-Sachdeva/Reddit-Mental-health-Dashboard",
+    "description": "This is a dashboard showcasing the analysis and visualisation of the reddit mental health dataset.",
+    "stars": 0,
+    "pushed_at": "2025-11-09T12:27:56Z",
+    "updated_at": "2025-11-09T12:27:59Z",
+    "queries": [
+      "mental health Reddit dataset"
+    ],
+    "readme_len": 110,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Reddit-Mental-health-Dashboard",
+        "description": "This is a dashboard showcasing the analysis and visualisation of the reddit mental health dataset.",
+        "data_type": "text",
+        "source_repository": "Disha-Sachdeva/Reddit-Mental-health-Dashboard",
+        "source_repository_url": "https://github.com/Disha-Sachdeva/Reddit-Mental-health-Dashboard",
+        "dataset_url": "https://github.com/Disha-Sachdeva/Reddit-Mental-health-Dashboard",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "IstiakFahim/reddit-mental-health-llm",
+    "url": "https://github.com/IstiakFahim/reddit-mental-health-llm",
+    "description": "A hierarchical mental health classification project using Reddit posts and specialized LLMs. Includes a 34k-post dataset, preprocessing pipeline, EDA, visualizations, and zero-shot/one-shot evaluation of models like EmoLLaMA, Mental-Alpaca, CPSYCoun, and Mental-LLaMA.",
+    "stars": 0,
+    "pushed_at": "2025-11-20T22:24:31Z",
+    "updated_at": "2025-11-20T22:24:34Z",
+    "queries": [
+      "mental health Reddit dataset"
+    ],
+    "readme_len": 296,
+    "actual_records_hint": false,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "reddit-mental-health-llm",
+        "description": "A hierarchical mental health classification project using Reddit posts and specialized LLMs. Includes a 34k-post dataset, preprocessing pipeline, EDA, visualizations, and zero-shot/one-shot evaluation of models like EmoLLaMA, Mental-Alpaca, CPSYCoun, and Mental-LLaMA.",
+        "data_type": "text",
+        "source_repository": "IstiakFahim/reddit-mental-health-llm",
+        "source_repository_url": "https://github.com/IstiakFahim/reddit-mental-health-llm",
+        "dataset_url": "https://github.com/IstiakFahim/reddit-mental-health-llm",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "iamtanmayag/Stress-Detection-Using-Machine-Learning",
+    "url": "https://github.com/iamtanmayag/Stress-Detection-Using-Machine-Learning",
+    "description": "Stress, anxiety, and depression are threatening the mental health of people. People often share their feelings on social media platforms like on Instagram in the form of posts and stories, and on Reddit in the form of asking for suggestions about their life on subreddits. So, here is my project to detect stress using people's messages as dataset.",
+    "stars": 8,
+    "pushed_at": "2023-07-19T22:55:54Z",
+    "updated_at": "2025-05-17T11:43:33Z",
+    "queries": [
+      "mental health Instagram dataset",
+      "stress social media dataset"
+    ],
+    "readme_len": 692,
+    "actual_records_hint": true,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Stress-Detection-Using-Machine-Learning",
+        "description": "Stress, anxiety, and depression are threatening the mental health of people. People often share their feelings on social media platforms like on Instagram in the form of posts and stories, and on Reddit in the form of asking for suggestions about their life on subreddits. So, here is my project to detect stress using people's messages as dataset.",
+        "data_type": "emotion",
+        "source_repository": "iamtanmayag/Stress-Detection-Using-Machine-Learning",
+        "source_repository_url": "https://github.com/iamtanmayag/Stress-Detection-Using-Machine-Learning",
+        "dataset_url": "https://github.com/iamtanmayag/Stress-Detection-Using-Machine-Learning",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Dista-lab/Modul-5---Analisis-SEM-PLS-Perilaku-Penggunaan-Instagram-Dampak-terhadap-Mental-Health-dan-Lifestyle",
+    "url": "https://github.com/Dista-lab/Modul-5---Analisis-SEM-PLS-Perilaku-Penggunaan-Instagram-Dampak-terhadap-Mental-Health-dan-Lifestyle",
+    "description": "Analisis pengaruh perilaku penggunaan Instagram (doom scrolling) terhadap engagement, mental health, dan lifestyle menggunakan metode SEM-PLS dengan dataset Kaggle (n=5.000). Kelas 2024A | Dinda Galuh Gumita, S.Stat., M.Stat.",
+    "stars": 0,
+    "pushed_at": "2026-05-26T06:21:29Z",
+    "updated_at": "2026-05-26T06:21:32Z",
+    "queries": [
+      "mental health Instagram dataset"
+    ],
+    "readme_len": 1143,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Modul-5---Analisis-SEM-PLS-Perilaku-Penggunaan-Instagram-Dampak-terhadap-Mental-Health-dan-Lifestyle",
+        "description": "Analisis pengaruh perilaku penggunaan Instagram (doom scrolling) terhadap engagement, mental health, dan lifestyle menggunakan metode SEM-PLS dengan dataset Kaggle (n=5.000). Kelas 2024A | Dinda Galuh Gumita, S.Stat., M.Stat.",
+        "data_type": "research_data",
+        "source_repository": "Dista-lab/Modul-5---Analisis-SEM-PLS-Perilaku-Penggunaan-Instagram-Dampak-terhadap-Mental-Health-dan-Lifestyle",
+        "source_repository_url": "https://github.com/Dista-lab/Modul-5---Analisis-SEM-PLS-Perilaku-Penggunaan-Instagram-Dampak-terhadap-Mental-Health-dan-Lifestyle",
+        "dataset_url": "https://github.com/Dista-lab/Modul-5---Analisis-SEM-PLS-Perilaku-Penggunaan-Instagram-Dampak-terhadap-Mental-Health-dan-Lifestyle",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Yasnagad3/Student-Depression-Dataset",
+    "url": "https://github.com/Yasnagad3/Student-Depression-Dataset",
+    "description": "\ud83d\udcca Built an interactive Power BI dashboard analyzing student depression trends across gender, age, CGPA, stress, and lifestyle. Includes filters, visuals, and insights to support mental health awareness. \ud83c\udf93\ud83d\udcad \ud83d\udd17 Connect with me on LinkedIn: Yash Nagad",
+    "stars": 0,
+    "pushed_at": "2025-05-22T05:46:48Z",
+    "updated_at": "2025-05-22T05:46:51Z",
+    "queries": [
+      "mental health LinkedIn dataset"
+    ],
+    "readme_len": 277,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Student-Depression-Dataset",
+        "description": "\ud83d\udcca Built an interactive Power BI dashboard analyzing student depression trends across gender, age, CGPA, stress, and lifestyle. Includes filters, visuals, and insights to support mental health awareness. \ud83c\udf93\ud83d\udcad \ud83d\udd17 Connect with me on LinkedIn: Yash Nagad",
+        "data_type": "research_data",
+        "source_repository": "Yasnagad3/Student-Depression-Dataset",
+        "source_repository_url": "https://github.com/Yasnagad3/Student-Depression-Dataset",
+        "dataset_url": "https://github.com/Yasnagad3/Student-Depression-Dataset",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "lewisc4/Mental-Health-Disorder-Classifier",
+    "url": "https://github.com/lewisc4/Mental-Health-Disorder-Classifier",
+    "description": "Creating a Reddit Comment Dataset and Using Graph ML to Classify Mental Health Disorders",
+    "stars": 1,
+    "pushed_at": "2023-03-24T00:39:51Z",
+    "updated_at": "2024-11-07T21:38:57Z",
+    "queries": [
+      "mental health comments dataset"
+    ],
+    "readme_len": 7832,
+    "actual_records_hint": true,
+    "has_post_text": true,
+    "has_username": true,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Mental-Health-Disorder-Classifier",
+        "description": "Creating a Reddit Comment Dataset and Using Graph ML to Classify Mental Health Disorders",
+        "data_type": "text",
+        "source_repository": "lewisc4/Mental-Health-Disorder-Classifier",
+        "source_repository_url": "https://github.com/lewisc4/Mental-Health-Disorder-Classifier",
+        "dataset_url": "https://github.com/lewisc4/Mental-Health-Disorder-Classifier",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Muzz109/Machine_Learning-",
+    "url": "https://github.com/Muzz109/Machine_Learning-",
+    "description": "The aim is to investigate how Twitter user\u2019s posts can help classify users according to mental health levels. We are creating a model that classifies the user comments using four different classifiers: Logistic Regression, K-Nearest Neighbors, Random Forest and Support Vector Machine (SVM) for predictive analysis, using supervised machine learning. The classifiers' results are compared to provide the most accurate figures for the prediction of depression levels of a group of datasets.   Tools Used :- AWS S3 ,EC2 ,PyCharm, GitBash",
+    "stars": 2,
+    "pushed_at": "2020-06-17T03:34:23Z",
+    "updated_at": "2023-08-17T17:24:04Z",
+    "queries": [
+      "mental health comments dataset"
+    ],
+    "readme_len": 0,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Resham0007/-Mental-Health-Condition-Monitoring-from-Social-Media",
+    "url": "https://github.com/Resham0007/-Mental-Health-Condition-Monitoring-from-Social-Media",
+    "description": "Git Repository for a Mental Health Condition Monitoring from Social Media. We have used natural language processing to analyze social media posts for signs of mental health conditions, aiming to provide early warnings or insights into population mental health trends.",
+    "stars": 5,
+    "pushed_at": "2025-02-14T05:39:54Z",
+    "updated_at": "2025-11-04T06:02:28Z",
+    "queries": [
+      "mental health social media posts"
+    ],
+    "readme_len": 10719,
+    "actual_records_hint": false,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": true,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [
+      "January 1, 2009, to January 2, 2021"
+    ],
+    "years_mentioned": [
+      "2021",
+      "2022"
+    ],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "-Mental-Health-Condition-Monitoring-from-Social-Media",
+        "description": "Git Repository for a Mental Health Condition Monitoring from Social Media. We have used natural language processing to analyze social media posts for signs of mental health conditions, aiming to provide early warnings or insights into population mental health trends.",
+        "data_type": "text",
+        "source_repository": "Resham0007/-Mental-Health-Condition-Monitoring-from-Social-Media",
+        "source_repository_url": "https://github.com/Resham0007/-Mental-Health-Condition-Monitoring-from-Social-Media",
+        "dataset_url": "https://github.com/Resham0007/-Mental-Health-Condition-Monitoring-from-Social-Media",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Nindaime/DepressionDetection",
+    "url": "https://github.com/Nindaime/DepressionDetection",
+    "description": "Detecting social media user depression levels (Mental Health Status) from their emotion words in comments and posts, and other social media activities at captured by this platform ",
+    "stars": 4,
+    "pushed_at": "2021-11-04T07:40:45Z",
+    "updated_at": "2026-01-07T15:14:08Z",
+    "queries": [
+      "mental health social media posts"
+    ],
+    "readme_len": 2009,
+    "actual_records_hint": false,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Natalina13/Predict-users-mental-health-using-social-media-posts",
+    "url": "https://github.com/Natalina13/Predict-users-mental-health-using-social-media-posts",
+    "description": "Use sentimental analysis and machine learning algorithms to predict the mental health of users using their social media posts.",
+    "stars": 5,
+    "pushed_at": "2018-12-01T00:28:23Z",
+    "updated_at": "2024-04-16T07:49:10Z",
+    "queries": [
+      "mental health social media posts"
+    ],
+    "readme_len": 625,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Prashant2108/Predicting-Mental-Health-Using-Social-Media-Posts",
+    "url": "https://github.com/Prashant2108/Predicting-Mental-Health-Using-Social-Media-Posts",
+    "description": null,
+    "stars": 4,
+    "pushed_at": "2019-10-12T03:10:09Z",
+    "updated_at": "2024-05-19T04:04:04Z",
+    "queries": [
+      "mental health social media posts"
+    ],
+    "readme_len": 625,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "swethahpvt/Mental-Health-Status-Classification-from-Social-Media-Text",
+    "url": "https://github.com/swethahpvt/Mental-Health-Status-Classification-from-Social-Media-Text",
+    "description": "Classify Reddit or Twitter posts into mental health categories (depression, anxiety, PTSD, normal) using NLP techniques. Apply BERT fine-tuning and compare with TF-IDF + SVM baselines. Address privacy and ethical considerations. Evaluate sensitivity and specificity. Discuss potential for early mental health intervention tools.",
+    "stars": 1,
+    "pushed_at": "2026-05-16T17:58:19Z",
+    "updated_at": "2026-09-08T11:24:57Z",
+    "queries": [
+      "mental health social media posts"
+    ],
+    "readme_len": 9429,
+    "actual_records_hint": true,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "explicitly_anonymized"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Mental-Health-Status-Classification-from-Social-Media-Text",
+        "description": "Classify Reddit or Twitter posts into mental health categories (depression, anxiety, PTSD, normal) using NLP techniques. Apply BERT fine-tuning and compare with TF-IDF + SVM baselines. Address privacy and ethical considerations. Evaluate sensitivity and specificity. Discuss potential for early mental health intervention tools.",
+        "data_type": "text",
+        "source_repository": "swethahpvt/Mental-Health-Status-Classification-from-Social-Media-Text",
+        "source_repository_url": "https://github.com/swethahpvt/Mental-Health-Status-Classification-from-Social-Media-Text",
+        "dataset_url": "https://github.com/swethahpvt/Mental-Health-Status-Classification-from-Social-Media-Text",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "explicitly_anonymized",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "pg815/Depression_Detection_Using_Machine_Learning",
+    "url": "https://github.com/pg815/Depression_Detection_Using_Machine_Learning",
+    "description": "Python code for Depression Detection using variuos machine learning algorithms and Twitter dataset for detecting depression from sentiments",
+    "stars": 25,
+    "pushed_at": "2021-09-07T17:50:04Z",
+    "updated_at": "2026-02-19T10:50:34Z",
+    "queries": [
+      "depression Twitter dataset"
+    ],
+    "readme_len": 961,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": true,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Depression_Detection_Using_Machine_Learning",
+        "description": "Python code for Depression Detection using variuos machine learning algorithms and Twitter dataset for detecting depression from sentiments",
+        "data_type": "emotion",
+        "source_repository": "pg815/Depression_Detection_Using_Machine_Learning",
+        "source_repository_url": "https://github.com/pg815/Depression_Detection_Using_Machine_Learning",
+        "dataset_url": "https://github.com/pg815/Depression_Detection_Using_Machine_Learning",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "ahmedshahriar/depression-tweets-scraper",
+    "url": "https://github.com/ahmedshahriar/depression-tweets-scraper",
+    "description": "A Scraper that scrapes '#depression' tweets daily powered by GitHub action and snscrape (stopped on June 30,2023)",
+    "stars": 25,
+    "pushed_at": "2023-07-20T20:38:06Z",
+    "updated_at": "2025-10-15T05:03:12Z",
+    "queries": [
+      "depression Twitter dataset"
+    ],
+    "readme_len": 401,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": "Apache-2.0",
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "aaronstone1699/Depression-detection",
+    "url": "https://github.com/aaronstone1699/Depression-detection",
+    "description": " Depression is one of the most common mental disorders with millions of people suffering from it.It has been found to have an impact on the texts written by the affected masses.In this study our main aim was to utilise tweets to predict the possibility of a user at-risk of depression through the use of Natural Language Processing(NLP) tools and deep learning algorithms.LSTM has been used as a baseline model that resulted in an accuracy of 95.12% and an F1 score of 0.9436. We implemented a hybrid Bi-LSTM + CNN model which we trained on learned embeddings from the tweet dataset was able to improve upon previous works and produce precision and recall of 0.9943 and 0.9988 respectively,giving an F1 score of 0.9971.",
+    "stars": 19,
+    "pushed_at": "2020-12-11T09:28:55Z",
+    "updated_at": "2025-10-17T14:54:35Z",
+    "queries": [
+      "depression Twitter dataset"
+    ],
+    "readme_len": 1307,
+    "actual_records_hint": true,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": "AGPL-3.0",
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Depression-detection",
+        "description": " Depression is one of the most common mental disorders with millions of people suffering from it.It has been found to have an impact on the texts written by the affected masses.In this study our main aim was to utilise tweets to predict the possibility of a user at-risk of depression through the use of Natural Language Processing(NLP) tools and deep learning algorithms.LSTM has been used as a baseline model that resulted in an accuracy of 95.12% and an F1 score of 0.9436. We implemented a hybrid Bi-LSTM + CNN model which we trained on learned embeddings from the tweet dataset was able to improve upon previous works and produce precision and recall of 0.9943 and 0.9988 respectively,giving an F1 score of 0.9971.",
+        "data_type": "text",
+        "source_repository": "aaronstone1699/Depression-detection",
+        "source_repository_url": "https://github.com/aaronstone1699/Depression-detection",
+        "dataset_url": "https://github.com/aaronstone1699/Depression-detection",
+        "source_platform": "GitHub",
+        "license": "AGPL-3.0",
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "abhillashpaal/Depression-Detection-using-Twitter-Dataset",
+    "url": "https://github.com/abhillashpaal/Depression-Detection-using-Twitter-Dataset",
+    "description": "Depression analysis using tweets",
+    "stars": 0,
+    "pushed_at": "2023-01-14T16:39:12Z",
+    "updated_at": "2023-01-14T16:39:12Z",
+    "queries": [
+      "depression Twitter dataset"
+    ],
+    "readme_len": 78,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Depression-Detection-using-Twitter-Dataset",
+        "description": "Depression analysis using tweets",
+        "data_type": "text",
+        "source_repository": "abhillashpaal/Depression-Detection-using-Twitter-Dataset",
+        "source_repository_url": "https://github.com/abhillashpaal/Depression-Detection-using-Twitter-Dataset",
+        "dataset_url": "https://github.com/abhillashpaal/Depression-Detection-using-Twitter-Dataset",
+        "source_platform": "GitHub",
+        "license": null,
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "efwoods/TwitterSentimentAnalysis",
+    "url": "https://github.com/efwoods/TwitterSentimentAnalysis",
+    "description": "Sentiment Analysis of tweets using the sentiment 140 dataset. Compares & contrasts the efficacy of various modeling techniques. Detects depression in tweets.",
+    "stars": 2,
+    "pushed_at": "2023-01-07T22:11:52Z",
+    "updated_at": "2023-01-07T22:09:43Z",
+    "queries": [
+      "depression Twitter dataset"
+    ],
+    "readme_len": 2897,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": "MIT",
+    "privacy_statuses": [
+      "unknown",
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 2,
+    "resources": [
+      {
+        "name": "Dataset",
+        "description": "Referenced dataset link: 'Dataset' on Kaggle",
+        "data_type": "research_data",
+        "source_repository": "efwoods/TwitterSentimentAnalysis",
+        "source_repository_url": "https://github.com/efwoods/TwitterSentimentAnalysis",
+        "dataset_url": "https://www.kaggle.com/datasets/kazanova/sentiment140",
+        "source_platform": "Kaggle",
+        "license": "MIT",
+        "access_method": "external_link",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Extracted from README link [Dataset](https://www.kaggle.com/datasets/kazanova/sentiment140)"
+      },
+      {
+        "name": "TwitterSentimentAnalysis",
+        "description": "Sentiment Analysis of tweets using the sentiment 140 dataset. Compares & contrasts the efficacy of various modeling techniques. Detects depression in tweets.",
+        "data_type": "emotion",
+        "source_repository": "efwoods/TwitterSentimentAnalysis",
+        "source_repository_url": "https://github.com/efwoods/TwitterSentimentAnalysis",
+        "dataset_url": "https://github.com/efwoods/TwitterSentimentAnalysis",
+        "source_platform": "GitHub",
+        "license": "MIT",
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "aryan-r22/Stress-Detection_Social-Media-Articles",
+    "url": "https://github.com/aryan-r22/Stress-Detection_Social-Media-Articles",
+    "description": "Datasets for the study: Stress Detection from Social Media Articles: New Dataset Benchmark and Analytical Study",
+    "stars": 5,
+    "pushed_at": "2022-10-04T14:34:22Z",
+    "updated_at": "2025-01-30T06:32:06Z",
+    "queries": [
+      "stress social media dataset"
+    ],
+    "readme_len": 2357,
+    "actual_records_hint": false,
+    "has_post_text": true,
+    "has_username": true,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": "Apache-2.0",
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [
+      "2022"
+    ],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "Stress-Detection_Social-Media-Articles",
+        "description": "Datasets for the study: Stress Detection from Social Media Articles: New Dataset Benchmark and Analytical Study",
+        "data_type": "text",
+        "source_repository": "aryan-r22/Stress-Detection_Social-Media-Articles",
+        "source_repository_url": "https://github.com/aryan-r22/Stress-Detection_Social-Media-Articles",
+        "dataset_url": "https://github.com/aryan-r22/Stress-Detection_Social-Media-Articles",
+        "source_platform": "GitHub",
+        "license": "Apache-2.0",
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "CJCascalheira/lgbtq_stress_dataset",
+    "url": "https://github.com/CJCascalheira/lgbtq_stress_dataset",
+    "description": "The LGBTQ+ Minority Stress on Social Media Dataset (LGBTQ+ MiSSoM)",
+    "stars": 3,
+    "pushed_at": "2023-12-05T20:57:54Z",
+    "updated_at": "2026-01-14T14:13:31Z",
+    "queries": [
+      "stress social media dataset"
+    ],
+    "readme_len": 1387,
+    "actual_records_hint": false,
+    "has_post_text": true,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": "GPL-3.0",
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "lgbtq_stress_dataset",
+        "description": "The LGBTQ+ Minority Stress on Social Media Dataset (LGBTQ+ MiSSoM)",
+        "data_type": "text",
+        "source_repository": "CJCascalheira/lgbtq_stress_dataset",
+        "source_repository_url": "https://github.com/CJCascalheira/lgbtq_stress_dataset",
+        "dataset_url": "https://github.com/CJCascalheira/lgbtq_stress_dataset",
+        "source_platform": "GitHub",
+        "license": "GPL-3.0",
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "Pavitr-Swain/stress-analysis-social-media",
+    "url": "https://github.com/Pavitr-Swain/stress-analysis-social-media",
+    "description": " A machine learning project that detects stress levels in social media posts (Twitter & Reddit) using NLP, sentiment analysis, and machine learning models.  \ud83d\udccc Tech Stack: Python, Sklearn, NLP, NLTK, TF-IDF, Sentiment Analysis, Random Forest, Logistic Regression, Data Visualization  \ud83d\udccc Dataset: Kaggle Stress Data",
+    "stars": 2,
+    "pushed_at": "2025-09-13T13:12:05Z",
+    "updated_at": "2025-09-13T13:12:08Z",
+    "queries": [
+      "stress social media dataset"
+    ],
+    "readme_len": 745,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": "MIT",
+    "privacy_statuses": [
+      "unknown"
+    ],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 1,
+    "resources": [
+      {
+        "name": "stress-analysis-social-media",
+        "description": " A machine learning project that detects stress levels in social media posts (Twitter & Reddit) using NLP, sentiment analysis, and machine learning models.  \ud83d\udccc Tech Stack: Python, Sklearn, NLP, NLTK, TF-IDF, Sentiment Analysis, Random Forest, Logistic Regression, Data Visualization  \ud83d\udccc Dataset: Kaggle Stress Data",
+        "data_type": "emotion",
+        "source_repository": "Pavitr-Swain/stress-analysis-social-media",
+        "source_repository_url": "https://github.com/Pavitr-Swain/stress-analysis-social-media",
+        "dataset_url": "https://github.com/Pavitr-Swain/stress-analysis-social-media",
+        "source_platform": "GitHub",
+        "license": "MIT",
+        "access_method": "repository_files",
+        "discovered_from": "README",
+        "privacy_status": "unknown",
+        "confidence": "high",
+        "notes": "Repository itself directly hosts or indexes mental-health dataset resources."
+      }
+    ],
+    "resolved_datasets": []
+  },
+  {
+    "repository": "srinu5833/Dataset-methods",
+    "url": "https://github.com/srinu5833/Dataset-methods",
+    "description": "Stress-Detection_Social-Media tweet data",
+    "stars": 0,
+    "pushed_at": "2025-07-18T11:40:15Z",
+    "updated_at": "2025-07-18T11:40:15Z",
+    "queries": [
+      "stress social media dataset"
+    ],
+    "readme_len": 0,
+    "actual_records_hint": false,
+    "has_post_text": false,
+    "has_username": false,
+    "has_profile_url": false,
+    "has_email": false,
+    "has_phone": false,
+    "has_timestamp": false,
+    "license": null,
+    "privacy_statuses": [],
+    "collection_period_snippets": [],
+    "years_mentioned": [],
+    "resources_count": 0,
+    "resources": [],
+    "resolved_datasets": []
+  }
+]

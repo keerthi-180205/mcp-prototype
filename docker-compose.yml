@@ -1,0 +1,15 @@
+services:
+  mmtf-mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mmtf-mcp:latest
+    container_name: mmtf-mcp-server
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
