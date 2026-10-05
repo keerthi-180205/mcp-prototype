@@ -1,8 +1,9 @@
-"""YouTube social data provider implementation using Agent Reach (yt-dlp capability backend)."""
-
+import asyncio
 import datetime
+import json
 import logging
 import re
+import shutil
 from typing import Any, Dict, List, Optional
 
 from server.models import (
@@ -32,8 +33,8 @@ class YouTubeSocialProvider(SocialDataProvider):
         self.adapter = adapter or AgentReachAdapter()
 
     def is_available(self) -> bool:
-        """Available if agent-reach is installed and yt-dlp tool is enabled."""
-        return self.adapter.is_installed()
+        """Available if yt-dlp or agent-reach is available on system."""
+        return bool(shutil.which("yt-dlp") or self.adapter.is_installed())
 
     def _extract_video_id(self, url_or_id: str) -> str:
         """Extract 11-char YouTube video ID from URL or return string directly."""
@@ -42,28 +43,62 @@ class YouTubeSocialProvider(SocialDataProvider):
             return match.group(1)
         return url_or_id.strip()
 
+    async def _run_yt_dlp(self, args: List[str], timeout: float = 30.0) -> Optional[str]:
+        """Execute yt-dlp binary asynchronously with timeout."""
+        try:
+            yt_bin = shutil.which("yt-dlp") or "yt-dlp"
+            proc = await asyncio.create_subprocess_exec(
+                yt_bin,
+                *args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            return stdout.decode().strip()
+        except Exception as exc:
+            logger.warning("yt-dlp subprocess execution error: %s", exc)
+            return None
+
     async def search_content(
         self, query: str, limit: int = 10, **kwargs: Any
     ) -> List[NormalizedSocialRecord]:
-        """Search YouTube for videos matching a query via Agent Reach."""
+        """Search YouTube for videos matching a query via Agent Reach / yt-dlp."""
         if not self.is_available():
-            logger.warning("YouTubeSocialProvider skipped: agent-reach not installed")
+            logger.warning("YouTubeSocialProvider skipped: agent-reach / yt-dlp not available")
             return []
 
-        # yt-dlp search query via agent-reach youtube.info "ytsearch{limit}:{query}"
-        search_target = f"ytsearch{limit}:{query}"
-        data = await self.adapter.execute_command(
-            "youtube.info", search_target, limit=limit, timeout=30.0
-        )
+        clean_limit = max(1, min(limit, 50))
+        raw_output = await self._run_yt_dlp([
+            f"ytsearch{clean_limit}:{query}",
+            "--dump-json",
+            "--flat-playlist",
+            "--no-playlist",
+        ], timeout=25.0)
+
+        entries: List[Dict[str, Any]] = []
+        if raw_output:
+            for line in raw_output.split("\n"):
+                if line.strip():
+                    try:
+                        entries.append(json.loads(line))
+                    except Exception:
+                        continue
+
+        if not entries:
+            # Fallback to adapter
+            search_target = f"ytsearch{clean_limit}:{query}"
+            data = await self.adapter.execute_command(
+                "youtube.info", search_target, limit=clean_limit, timeout=30.0
+            )
+            if isinstance(data, dict):
+                entries = data.get("entries", [data])
 
         records: List[NormalizedSocialRecord] = []
         now_iso = datetime.datetime.utcnow().isoformat() + "Z"
 
-        if not data:
+        if not entries:
             return []
 
-        # Handle multiple items or single item payload from yt-dlp
-        entries = data.get("entries", [data]) if isinstance(data, dict) else []
         for item in entries:
             if not isinstance(item, dict):
                 continue
@@ -201,9 +236,59 @@ class YouTubeSocialProvider(SocialDataProvider):
     async def get_comments(
         self, content_url_or_id: str, limit: int = 20
     ) -> List[SocialInteraction]:
-        """Fetch comments if supported by backend."""
-        # Standard yt-dlp does not extract comment threads by default without additional flags
-        return []
+        """Fetch public comments for a YouTube video via yt-dlp."""
+        video_id = self._extract_video_id(content_url_or_id)
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+        safe_limit = max(1, min(limit, 50))
+
+        raw_output = await self._run_yt_dlp([
+            "--write-comments",
+            "--extractor-args",
+            f"youtube:max_comments={safe_limit}",
+            "--dump-json",
+            "--no-playlist",
+            video_url,
+        ], timeout=25.0)
+
+        if not raw_output:
+            return []
+
+        interactions: List[SocialInteraction] = []
+        try:
+            data = json.loads(raw_output)
+            comments = data.get("comments", [])
+            for c in comments[:safe_limit]:
+                cid = c.get("id") or str(c.get("timestamp") or "")
+                c_author = c.get("author") or ""
+                c_author_id = c.get("author_id")
+                c_author_url = c.get("author_url")
+                c_text = c.get("text") or ""
+                c_likes = c.get("like_count") or 0
+                ts = c.get("timestamp")
+                c_time = None
+                if ts:
+                    c_time = datetime.datetime.utcfromtimestamp(ts).isoformat() + "Z"
+
+                interactions.append(
+                    SocialInteraction(
+                        interaction_id=cid,
+                        type="comment",
+                        text=c_text,
+                        author=SocialAuthor(
+                            username=c_author,
+                            user_id=c_author_id,
+                            display_name=c_author,
+                            profile_url=c_author_url,
+                            is_verified=c.get("author_is_verified", False),
+                        ),
+                        created_at=c_time,
+                        likes=c_likes,
+                    )
+                )
+        except Exception as exc:
+            logger.warning("Error parsing YouTube comments: %s", exc)
+
+        return interactions
 
     async def get_profile(
         self, identifier: str

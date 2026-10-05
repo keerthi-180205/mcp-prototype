@@ -579,3 +579,44 @@ async def test_search_social_topic_mcp_tool_invocation():
         assert out["query"] == "mental health"
 
 
+@pytest.mark.asyncio
+async def test_youtube_social_provider_mocked():
+    """Verify YouTubeSocialProvider search and comments parsing."""
+    import json
+    from unittest.mock import AsyncMock, patch
+    from server.providers.social.youtube import YouTubeSocialProvider
+
+    provider = YouTubeSocialProvider()
+    fake_search_output = (
+        '{"id": "yt_123", "title": "Fitness Guide", "uploader": "Coach Sam", "channel_id": "c_1", "webpage_url": "https://youtube.com/watch?v=yt_123", "view_count": 50000}\n'
+    )
+    fake_comments_output = json.dumps({
+        "comments": [
+            {
+                "id": "c_yt_1",
+                "author": "@fitness_fan",
+                "author_id": "u_1",
+                "author_url": "https://youtube.com/@fitness_fan",
+                "text": "Great advice on workout routines!",
+                "like_count": 15,
+                "timestamp": 1720000000,
+            }
+        ]
+    })
+
+    with patch.object(provider, "_run_yt_dlp", new=AsyncMock(side_effect=[fake_search_output, fake_comments_output])):
+        records = await provider.search_content("fitness", limit=5)
+        assert len(records) == 1
+        assert records[0].platform == "youtube"
+        assert records[0].content_id == "yt_123"
+        assert records[0].author.username == "Coach Sam"
+        assert records[0].engagement.views == 50000
+
+        comments = await provider.get_comments("yt_123", limit=5)
+        assert len(comments) == 1
+        assert comments[0].interaction_id == "c_yt_1"
+        assert comments[0].author.username == "@fitness_fan"
+        assert comments[0].likes == 15
+
+
+
