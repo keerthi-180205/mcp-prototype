@@ -41,7 +41,7 @@ class GitHubSocialProvider(SocialDataProvider):
     ) -> List[NormalizedSocialRecord]:
         """Search public GitHub repositories for a topic or keyword."""
         try:
-            repos = await self.provider.search_repositories(query=query, per_page=limit)
+            repos = await self.provider.search_repositories(query=query, limit=limit)
         except Exception as e:
             logger.error("GitHub search failed: %s", e)
             return []
@@ -58,7 +58,7 @@ class GitHubSocialProvider(SocialDataProvider):
                 content_type="repository",
                 source_url=repo.html_url,
                 content_id=str(repo.id),
-                published_at=repo.created_at,
+                published_at=repo.pushed_at or repo.updated_at or repo.created_at,
                 author=SocialAuthor(
                     username=repo.owner,
                     display_name=repo.owner,
