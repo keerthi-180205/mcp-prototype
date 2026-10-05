@@ -1,6 +1,6 @@
 """Data models for repository metadata, dataset candidates, external dataset metadata, and validation results."""
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -308,5 +308,111 @@ class InstagramTopicResearchResult(BaseModel):
     query: str = Field(description="Search topic query")
     platform: str = Field(default="instagram", description="Platform identifier")
     results: List[InstagramTopicPostResult] = Field(default_factory=list, description="Discovered posts with comments")
+
+
+# =====================================================================
+# Universal Multi-Platform Social Intelligence Data Models
+# =====================================================================
+
+
+class SocialAuthor(BaseModel):
+    """Normalized author profile across any social or public platform."""
+
+    username: Optional[str] = Field(default=None, description="Public username or handle")
+    user_id: Optional[str] = Field(default=None, description="Public user ID if available")
+    display_name: Optional[str] = Field(default=None, description="Public display name")
+    profile_url: Optional[str] = Field(default=None, description="Profile URL")
+    is_verified: Optional[bool] = Field(default=None, description="Whether the profile is verified")
+    is_private: Optional[bool] = Field(default=None, description="Whether the profile is marked private")
+
+
+class SocialContent(BaseModel):
+    """Normalized text and metadata content."""
+
+    text: Optional[str] = Field(default=None, description="Main text body, transcript or article text")
+    title: Optional[str] = Field(default=None, description="Title of video, post or article")
+    caption: Optional[str] = Field(default=None, description="Caption of post or reel")
+    tags: List[str] = Field(default_factory=list, description="Hashtags or topic tags")
+
+
+class SocialEngagement(BaseModel):
+    """Normalized engagement metrics across platforms."""
+
+    likes: Optional[int] = Field(default=None, description="Public like count")
+    comments: Optional[int] = Field(default=None, description="Public comments count")
+    views: Optional[int] = Field(default=None, description="Public views/impressions count")
+    shares: Optional[int] = Field(default=None, description="Public repost/share count")
+
+
+class SocialInteraction(BaseModel):
+    """Normalized interaction such as comment, reply, or mention."""
+
+    interaction_id: Optional[str] = Field(default=None, description="Unique interaction/comment ID")
+    type: str = Field(default="comment", description="Interaction type: comment, reply, quote, mention")
+    text: str = Field(description="Interaction text content")
+    author: SocialAuthor = Field(default_factory=SocialAuthor, description="Author of the interaction")
+    created_at: Optional[str] = Field(default=None, description="ISO timestamp of interaction")
+    likes: Optional[int] = Field(default=None, description="Like count on the interaction")
+
+
+class ProvenanceMetadata(BaseModel):
+    """Origin and provenance tracking for acquired data."""
+
+    source_platform: str = Field(description="Social platform name (e.g. instagram, youtube, reddit, etc.)")
+    source_provider: str = Field(description="Provider or capability layer (e.g. apify, agent-reach, official_api)")
+    backend_tool: Optional[str] = Field(default=None, description="Underlying backend tool (e.g. yt-dlp, jina, opencli)")
+    fetched_at: str = Field(description="ISO timestamp when data was retrieved")
+    source_url: str = Field(description="Direct public URL to the content")
+    provider_metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional provider-specific metadata")
+
+
+class NormalizedSocialRecord(BaseModel):
+    """Unified normalized record representing any social or web interaction."""
+
+    record_id: str = Field(description="Deterministic or UUID record identifier (e.g. platform:content_id)")
+    platform: str = Field(description="Social platform: instagram, youtube, reddit, x, github, web, rss")
+    content_type: str = Field(description="Type of content: reel, post, video, tweet, issue, discussion, article")
+    source_url: str = Field(description="Canonical public URL")
+    content_id: str = Field(description="Platform-specific content ID or shortcode")
+    published_at: Optional[str] = Field(default=None, description="ISO timestamp when published")
+    author: SocialAuthor = Field(default_factory=SocialAuthor, description="Content author details")
+    content: SocialContent = Field(default_factory=SocialContent, description="Text, title, caption, and tags")
+    engagement: SocialEngagement = Field(default_factory=SocialEngagement, description="Engagement metrics")
+    interactions: List[SocialInteraction] = Field(default_factory=list, description="Public comments or replies")
+    metadata: ProvenanceMetadata = Field(description="Data provenance metadata")
+    relevance_score: Optional[float] = Field(default=None, description="Calculated relevance score (0.0 to 1.0)")
+
+
+class SocialSearchFilter(BaseModel):
+    """Filter parameters for social search operations."""
+
+    topic: str = Field(description="Target search topic, query or keyword")
+    date_from: Optional[str] = Field(default=None, description="Start date ISO string")
+    date_to: Optional[str] = Field(default=None, description="End date ISO string")
+    months_back: Optional[int] = Field(default=3, description="Months back filter (e.g. 3, 4, 6, 12)")
+    relevance_threshold: Optional[float] = Field(default=0.0, description="Minimum relevance score threshold (0.0 to 1.0)")
+    max_results: int = Field(default=10, description="Maximum results to return")
+
+
+class SocialPlatformSummary(BaseModel):
+    """Summary of data collected per platform."""
+
+    platform: str
+    total_records: int
+    total_interactions: int
+    latest_activity: Optional[str] = None
+
+
+class SocialIntelligenceReport(BaseModel):
+    """Executive cross-platform intelligence report."""
+
+    topic: str
+    total_records: int
+    total_interactions: int
+    platforms_covered: List[SocialPlatformSummary] = Field(default_factory=list)
+    top_records: List[NormalizedSocialRecord] = Field(default_factory=list)
+    generated_at: str
+    summary_notes: Optional[str] = None
+
 
 

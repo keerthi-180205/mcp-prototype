@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from server.config import get_settings
 from server.logging_config import async_timed_operation, configure_logging, get_logger, timed_operation
@@ -76,6 +76,13 @@ from server.services.instagram import (
     InstagramServiceError,
     InstagramValidationError,
 )
+from server.models import NormalizedSocialRecord
+from server.services.filtering import (
+    filter_by_relevance,
+    generate_social_report as create_social_report,
+    normalize_raw_social_data,
+)
+from server.services.social_intelligence import get_social_intelligence_service
 
 # Initialize the MCP server with the service name
 mcp = FastMCP("mmtf-client-discovery")
@@ -90,6 +97,7 @@ gemini_client = GeminiClient(settings=settings)
 apify_client = ApifyClient(settings=settings)
 apify_instagram_provider = ApifyInstagramProvider(client=apify_client, settings=settings)
 instagram_service = InstagramService(provider=apify_instagram_provider)
+social_service = get_social_intelligence_service()
 
 
 
@@ -784,7 +792,220 @@ async def research_instagram_topic(
         return _handle_instagram_error(exc)
 
 
+# ==============================================================================
+# Universal Social Intelligence & Outreach MCP Tools
+# ==============================================================================
+
+
+@mcp.tool()
+async def search_social_content(
+    platform: str,
+    topic: str,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    months_back: Optional[int] = 3,
+    max_results: int = 10,
+) -> Dict[str, Any]:
+    """Search public content on any supported platform (instagram, youtube, github, web, rss, reddit, x)
+
+    Normalizes output into a common schema, filters by recency and relevance,
+    and returns verified public content without accessing private accounts.
+    """
+    try:
+        records = await social_service.search_content(
+            platform=platform,
+            topic=topic,
+            date_from=date_from,
+            date_to=date_to,
+            months_back=months_back,
+            max_results=max_results,
+        )
+        return {
+            "status": "success",
+            "platform": platform,
+            "topic": topic,
+            "count": len(records),
+            "results": [r.model_dump() for r in records],
+        }
+    except Exception as exc:
+        logger.error("[SOCIAL] search_social_content error: %s", exc, exc_info=True)
+        return {"status": "error", "message": str(exc), "platform": platform}
+
+
+@mcp.tool()
+async def get_social_content(
+    platform: str,
+    content_url: str,
+) -> Dict[str, Any]:
+    """Retrieve details, captions/transcripts, and metadata for a specific public post, reel, or video."""
+    try:
+        record = await social_service.get_content(platform=platform, content_url_or_id=content_url)
+        if not record:
+            return {
+                "status": "not_found",
+                "message": f"Content not found or platform '{platform}' provider unconfigured.",
+            }
+        return {"status": "success", "record": record.model_dump()}
+    except Exception as exc:
+        logger.error("[SOCIAL] get_social_content error: %s", exc, exc_info=True)
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+async def get_social_comments(
+    platform: str,
+    content_url: str,
+    max_comments: int = 20,
+) -> Dict[str, Any]:
+    """Extract public comments and public commenter details from a post or reel without accessing private DMs."""
+    try:
+        comments = await social_service.get_comments(
+            platform=platform, content_url_or_id=content_url, max_comments=max_comments
+        )
+        return {
+            "status": "success",
+            "platform": platform,
+            "content_url": content_url,
+            "count": len(comments),
+            "comments": [c.model_dump() for c in comments],
+        }
+    except Exception as exc:
+        logger.error("[SOCIAL] get_social_comments error: %s", exc, exc_info=True)
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+async def get_profile(
+    platform: str,
+    profile_identifier: str,
+) -> Dict[str, Any]:
+    """Retrieve public profile metadata for a username, handle, or URL across supported platforms."""
+    try:
+        profile = await social_service.get_profile(platform=platform, identifier=profile_identifier)
+        if not profile:
+            return {"status": "not_found", "message": f"Profile not found on platform '{platform}'."}
+        return {"status": "success", "platform": platform, "profile": profile.model_dump()}
+    except Exception as exc:
+        logger.error("[SOCIAL] get_profile error: %s", exc, exc_info=True)
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+async def search_multi_platform(
+    topic: str,
+    platforms: Optional[List[str]] = None,
+    months_back: int = 3,
+    max_results_per_platform: int = 10,
+    min_relevance: float = 0.2,
+    auto_store: bool = True,
+) -> Dict[str, Any]:
+    """Execute simultaneous cross-platform discovery across Instagram, YouTube, GitHub, Web, etc.
+
+    Normalizes all content to a single schema, applies timestamp recency filtering
+    (e.g., last 3, 6, 12 months), scores relevance, and automatically deduplicates & stores in SQLite.
+    """
+    try:
+        records = await social_service.search_multi_platform(
+            topic=topic,
+            platforms=platforms,
+            months_back=months_back,
+            max_results_per_platform=max_results_per_platform,
+            min_relevance=min_relevance,
+            auto_store=auto_store,
+        )
+        return {
+            "status": "success",
+            "topic": topic,
+            "total_records": len(records),
+            "records": [r.model_dump() for r in records],
+        }
+    except Exception as exc:
+        logger.error("[SOCIAL] search_multi_platform error: %s", exc, exc_info=True)
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def filter_relevant_content(
+    records: List[Dict[str, Any]],
+    topic: str,
+    min_relevance: float = 0.2,
+) -> Dict[str, Any]:
+    """Filter raw or normalized social records using lexical and hashtag relevance scoring."""
+    try:
+        parsed_records = [NormalizedSocialRecord(**r) for r in records]
+        # Synchronous lexical scoring
+        scored = []
+        for r in parsed_records:
+            score = 1.0
+            from server.services.filtering import calculate_lexical_relevance
+            score = calculate_lexical_relevance(r, topic)
+            r.relevance_score = score
+            if score >= min_relevance:
+                scored.append(r)
+        scored.sort(key=lambda x: (x.relevance_score or 0.0), reverse=True)
+        return {
+            "status": "success",
+            "topic": topic,
+            "original_count": len(records),
+            "filtered_count": len(scored),
+            "records": [r.model_dump() for r in scored],
+        }
+    except Exception as exc:
+        logger.error("[SOCIAL] filter_relevant_content error: %s", exc, exc_info=True)
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def normalize_social_data(
+    raw_data: Dict[str, Any],
+    platform: str,
+    provider: str,
+    content_type: str = "post",
+) -> Dict[str, Any]:
+    """Convert arbitrary raw provider output into the unified NormalizedSocialRecord schema."""
+    try:
+        record = normalize_raw_social_data(
+            raw_dict=raw_data,
+            platform=platform,
+            provider=provider,
+            content_type=content_type,
+        )
+        return {"status": "success", "record": record.model_dump()}
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def store_social_records(
+    records: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Persist normalized social records to SQLite with automatic deduplication on (platform, content_id)."""
+    try:
+        parsed = [NormalizedSocialRecord(**r) for r in records]
+        stats = social_service.store_records(parsed)
+        return {"status": "success", "storage_stats": stats}
+    except Exception as exc:
+        logger.error("[SOCIAL] store_social_records error: %s", exc, exc_info=True)
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def generate_social_report(
+    records: List[Dict[str, Any]],
+    topic: str,
+) -> Dict[str, Any]:
+    """Synthesize cross-platform social records into an executive analytical report."""
+    try:
+        parsed = [NormalizedSocialRecord(**r) for r in records]
+        report = create_social_report(parsed, topic=topic)
+        return {"status": "success", "report": report.model_dump()}
+    except Exception as exc:
+        logger.error("[SOCIAL] generate_social_report error: %s", exc, exc_info=True)
+        return {"status": "error", "message": str(exc)}
+
+
 if __name__ == "__main__":
     mcp.run()
+
 
 
