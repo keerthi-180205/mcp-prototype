@@ -328,13 +328,13 @@ class InstagramService:
     async def search_posts_or_reels(
         self,
         query: str,
-        max_results: int = 5,
+        max_results: int = 20,
     ) -> List[InstagramPost]:
         """Search public Instagram posts/reels for a given topic query.
 
         Args:
-            query: Topic or search keyword (e.g. 'mental health').
-            max_results: Maximum number of results to retrieve.
+            query: Topic or search keyword (e.g. 'Virat', 'mental health', 'ebook selling').
+            max_results: Maximum number of results to retrieve (default: 20, safe max: 50).
 
         Returns:
             List of normalized InstagramPost objects.
@@ -348,10 +348,11 @@ class InstagramService:
         if max_results <= 0:
             raise InstagramValidationError("max_results must be a positive integer.")
 
+        safe_limit = max(1, min(max_results, 50))
         clean_query = query.strip()
         raw_items = await self.provider.search_posts_or_reels(
             query=clean_query,
-            max_results=max_results,
+            max_results=safe_limit,
         )
 
         results: List[InstagramPost] = []
@@ -359,18 +360,17 @@ class InstagramService:
             post = normalize_post_data(raw)
             if "/p/" in post.url or "/reel/" in post.url or "/reels/" in post.url:
                 results.append(post)
-            if len(results) >= max_results:
+            elif post.content_id and len(post.content_id) > 5 and not post.content_id.startswith("http"):
+                post.url = f"https://www.instagram.com/reel/{post.content_id}/"
+                results.append(post)
+            if len(results) >= safe_limit:
                 break
 
-        # Fallback if no specific post/reel URL pattern was matched
-        if not results and raw_items:
-            for raw in raw_items[:max_results]:
-                results.append(normalize_post_data(raw))
-
         logger.info(
-            "[INSTAGRAM_SERVICE] Retrieved and normalized %d post(s) for query=%r",
+            "[INSTAGRAM_SERVICE] Retrieved and normalized %d post(s) for query=%r (limit=%d)",
             len(results),
             clean_query,
+            safe_limit,
         )
         return results
 

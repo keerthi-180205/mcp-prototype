@@ -30,7 +30,7 @@ class ApifyInstagramProvider:
     async def search_posts_or_reels(
         self,
         query: str,
-        max_results: int = 5,
+        max_results: int = 20,
     ) -> List[Dict[str, Any]]:
         """Execute the Instagram post/reel search Actor via Apify API.
 
@@ -38,11 +38,19 @@ class ApifyInstagramProvider:
         """
         clean_tag = query.lstrip("#").replace(" ", "").lower()
         tag_url = f"https://www.instagram.com/explore/tags/{clean_tag}/"
+        direct_urls = [tag_url]
+
+        # If query is a single handle or name (e.g. 'virat'), also check public profile feed
+        trimmed = query.strip().lower()
+        if " " not in trimmed and trimmed.isalnum() and len(trimmed) >= 3:
+            direct_urls.append(f"https://www.instagram.com/{trimmed}/")
+
+        safe_limit = max(1, min(max_results, 50))
         run_input: Dict[str, Any] = {
-            "directUrls": [tag_url],
+            "directUrls": direct_urls,
             "hashtags": [clean_tag],
             "resultsType": "posts",
-            "resultsLimit": max_results,
+            "resultsLimit": safe_limit,
         }
 
         logger.info(

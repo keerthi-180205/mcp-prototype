@@ -1,16 +1,56 @@
+# Virtual environments
 .venv/
+venv/
+env/
+ENV/
+
+# Python bytecode & cache
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 .pytest_cache/
 .coverage
 htmlcov/
 *.egg-info/
 dist/
 build/
+
+# Sensitive environment credentials & secrets
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.cert
+
+# Browser sessions & cookies (Zero-token / session safety)
+*.session
+*.cookie
+*.cookies
+cookies.txt
+sessions/
+auth_tokens/
+
+# Local databases & storage
 data/*.db
+data/*.sqlite*
 *.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Logs & debugging
+*.log
+logs/
+
+# Node & frontend inspector
+node_modules/
+.npm/
+
+# Operating system & IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -322,3 +322,53 @@ async def test_mcp_social_tools():
     assert report_res["status"] == "success"
     assert report_res["report"]["total_records"] == 1
     assert report_res["report"]["topic"] == "social data"
+
+
+@pytest.mark.asyncio
+async def test_instagram_provider_abstraction_and_query_discovery():
+    """Phase 3 & Phase 4 test: InstagramProvider abstraction and natural language query discovery without URL."""
+    from unittest.mock import AsyncMock
+    from server.providers.social.instagram import InstagramSocialProvider
+    from server.models import InstagramPost, InstagramAuthor as IGAuthor
+    from server.services.instagram import InstagramValidationError
+
+    mock_service = AsyncMock()
+    # Simulate discovery results for natural language query "Virat"
+    mock_service.search_posts_or_reels.return_value = [
+        InstagramPost(
+            platform="instagram",
+            content_type="reel",
+            content_id="reel_virat_01",
+            url="https://www.instagram.com/reel/reel_virat_01/",
+            caption="Match winning innings highlights! #virat #cricket",
+            author=IGAuthor(username="virat.kohli", display_name="Virat Kohli", is_verified=True),
+            created_at="2026-09-01T10:00:00Z",
+            like_count=500000,
+            comment_count=12000,
+            view_count=2500000,
+        )
+    ]
+
+    provider = InstagramSocialProvider(service=mock_service)
+    assert provider.platform_name == "instagram"
+    assert provider.provider_name == "apify"
+
+    # Natural language query with NO URL provided
+    results = await provider.search_content(query="Virat", limit=20)
+    mock_service.search_posts_or_reels.assert_called_once_with(query="Virat", max_results=20)
+
+    assert len(results) == 1
+    rec = results[0]
+    assert rec.platform == "instagram"
+    assert rec.content_id == "reel_virat_01"
+    assert rec.author.username == "virat.kohli"
+    assert rec.author.is_verified is True
+    assert rec.engagement.likes == 500000
+    assert rec.metadata.source_provider == "apify"
+
+    # Validation: query cannot be empty
+    from server.services.instagram import InstagramService
+    real_service = InstagramService(provider=AsyncMock())
+    with pytest.raises(InstagramValidationError):
+        await real_service.search_posts_or_reels(query="   ", max_results=20)
+

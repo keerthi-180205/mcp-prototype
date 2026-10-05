@@ -238,6 +238,8 @@ class InstagramAuthor(BaseModel):
     id: Optional[str] = Field(default=None, description="Public user or creator ID")
     username: Optional[str] = Field(default=None, description="Instagram username handle")
     display_name: Optional[str] = Field(default=None, description="Public display or full name")
+    is_verified: bool = Field(default=False, description="Whether the account is verified")
+    is_private: bool = Field(default=False, description="Whether the account is private")
 
 
 class InstagramPost(BaseModel):

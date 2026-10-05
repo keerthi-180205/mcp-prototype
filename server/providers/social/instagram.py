@@ -41,7 +41,7 @@ class InstagramSocialProvider(SocialDataProvider):
         return url_or_id.strip().strip("/")
 
     async def search_content(
-        self, query: str, limit: int = 10, **kwargs: Any
+        self, query: str, limit: int = 20, **kwargs: Any
     ) -> List[NormalizedSocialRecord]:
         """Search public Instagram posts/reels for a topic tag or query."""
         if not self.is_available():
@@ -68,8 +68,8 @@ class InstagramSocialProvider(SocialDataProvider):
                     user_id=post.author.id if post.author else None,
                     display_name=post.author.display_name if post.author else None,
                     profile_url=f"https://www.instagram.com/{post.author.username}/" if post.author and post.author.username else None,
-                    is_verified=post.author.is_verified if post.author else False,
-                    is_private=post.author.is_private if post.author else False,
+                    is_verified=getattr(post.author, "is_verified", False) if post.author else False,
+                    is_private=getattr(post.author, "is_private", False) if post.author else False,
                 ),
                 content=SocialContent(
                     caption=post.caption,
