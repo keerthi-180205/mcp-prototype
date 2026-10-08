@@ -76,39 +76,37 @@ export default function ResultsCard({ card }) {
   const hasBelowTarget = Object.keys(below_target).length > 0
 
   return (
-    <div className="mt-3 p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-xl max-w-2xl text-slate-100">
+    <div className="llm-card results-card">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+      <div className="card-header-row">
         <div>
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-400" />
-            <h4 className="font-semibold text-base text-white">Collection Results</h4>
+          <div className="card-title-group">
+            <Sparkles className="w-4 h-4" style={{ color: '#10a37f' }} />
+            <h4 className="card-title">Collection Results</h4>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
             '{topic}' — {total_comments.toLocaleString()} comments collected ({status})
-          </p>
+          </div>
         </div>
         <DownloadButtons jobId={job_id} />
       </div>
 
-      {/* Counts per Platform Badges */}
-      <div className="flex flex-wrap items-center gap-2 py-3 border-b border-slate-800/60">
-        <span className="text-xs font-medium text-slate-400">Collected:</span>
+      {/* Counts per Platform */}
+      <div className="results-counts-row">
+        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Counts:</span>
         {Object.entries(counts_per_platform).map(([plat, cnt]) => (
-          <span
-            key={plat}
-            className="px-2.5 py-1 rounded-md text-xs font-semibold uppercase bg-slate-800 border border-slate-700 text-slate-200"
-          >
-            {plat}: <span className="text-emerald-400">{cnt.toLocaleString()}</span>
+          <span key={plat} className="count-pill">
+            <span style={{ textTransform: 'uppercase', marginRight: '4px' }}>{plat}:</span>
+            <strong>{cnt.toLocaleString()}</strong>
           </span>
         ))}
       </div>
 
       {/* Below-Target Notices */}
       {hasBelowTarget && (
-        <div className="my-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 space-y-1.5">
-          <div className="flex items-center gap-1.5 font-semibold text-amber-200">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
+        <div className="card-notice-box">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+            <AlertTriangle className="w-4 h-4" style={{ color: '#fbbf24' }} />
             <span>Below-Target Explanation</span>
           </div>
           {Object.entries(below_target).map(([plat, info]) => {
@@ -121,8 +119,8 @@ export default function ResultsCard({ card }) {
               reasonText = `stopped due to error: ${info.error}`
             }
             return (
-              <p key={plat} className="leading-relaxed">
-                • <strong className="uppercase">{plat}</strong>: collected {info.collected} / {info.target} ({reasonText})
+              <p key={plat}>
+                • <strong style={{ textTransform: 'uppercase' }}>{plat}</strong>: collected {info.collected} / {info.target} ({reasonText})
               </p>
             )
           })}
@@ -131,30 +129,33 @@ export default function ResultsCard({ card }) {
 
       {/* Top Comments Highlights */}
       {Object.keys(top_comments).length > 0 && (
-        <div className="my-3 space-y-2">
-          <h5 className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-            <TrendingUp className="w-3.5 h-3.5 text-indigo-400" /> Top Engaging Comments
-          </h5>
-          <div className="space-y-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <TrendingUp className="w-3.5 h-3.5" style={{ color: '#10a37f' }} /> Top Engaging Comments
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {Object.entries(top_comments).map(([plat, comments]) => (
-              <div key={plat} className="space-y-1.5">
+              <div key={plat} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {comments.slice(0, 2).map((c, i) => (
                   <div
                     key={i}
-                    className="p-2.5 rounded-lg bg-slate-800/50 border border-slate-700/40 text-xs flex flex-col gap-1"
+                    style={{
+                      background: 'var(--bg-card-subtle)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '12px'
+                    }}
                   >
-                    <div className="flex items-center justify-between text-slate-400">
-                      <div className="flex items-center gap-1.5 font-medium">
-                        <span className="uppercase text-slate-300 font-semibold">{c.platform || plat}</span>
-                        <span>•</span>
-                        <span className="text-slate-300">{c.username || c.user_id}</span>
-                      </div>
-                      <div className="flex items-center gap-1 text-rose-400">
-                        <Heart className="w-3 h-3" />
-                        <span>{c.likes || 0}</span>
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      <span style={{ fontWeight: 600, color: '#ececec', textTransform: 'uppercase' }}>
+                        {c.platform || plat} • {c.username || c.user_id}
+                      </span>
+                      <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Heart className="w-3 h-3" /> {c.likes || 0}
+                      </span>
                     </div>
-                    <p className="text-slate-200 leading-snug">{c.comment}</p>
+                    <p style={{ color: '#d1d5db' }}>{c.comment}</p>
                   </div>
                 ))}
               </div>
@@ -164,92 +165,82 @@ export default function ResultsCard({ card }) {
       )}
 
       {/* Platform Filter Tabs */}
-      <div className="mt-4 mb-2 flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-1 text-xs">
-          <Filter className="w-3.5 h-3.5 text-slate-400 mr-1" />
+      <div className="results-filter-nav">
+        <div className="filter-btn-group">
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-muted)', marginRight: '6px' }}>
+            <Filter className="w-3.5 h-3.5" /> Filter:
+          </span>
           <button
             onClick={() => handleFilterChange('all')}
-            className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
-              activeFilter === 'all'
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-            }`}
+            className={`filter-pill ${activeFilter === 'all' ? 'active' : ''}`}
           >
-            All
+            All Platforms
           </button>
           {platformKeys.map(plat => (
             <button
               key={plat}
               onClick={() => handleFilterChange(plat)}
-              className={`px-2.5 py-1 rounded-md font-medium uppercase transition-colors ${
-                activeFilter === plat
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-              }`}
+              className={`filter-pill ${activeFilter === plat ? 'active' : ''}`}
+              style={{ textTransform: 'uppercase' }}
             >
               {plat}
             </button>
           ))}
         </div>
 
-        <div className="text-xs text-slate-400">
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           Page {currentPage} of {totalPages}
         </div>
       </div>
 
       {/* Paginated Comments Table */}
-      <div className="overflow-x-auto rounded-lg border border-slate-800 bg-slate-950/40">
-        <table className="w-full text-left text-xs text-slate-300">
-          <thead className="bg-slate-800/80 uppercase font-semibold text-slate-400 border-b border-slate-700">
+      <div className="llm-table-wrap">
+        <table className="llm-data-table">
+          <thead>
             <tr>
-              <th className="py-2.5 px-3">Platform</th>
-              <th className="py-2.5 px-3">User</th>
-              <th className="py-2.5 px-3">Comment</th>
-              <th className="py-2.5 px-3">Likes</th>
-              <th className="py-2.5 px-3 text-right">Link</th>
+              <th>Platform</th>
+              <th>User</th>
+              <th>Comment</th>
+              <th>Likes</th>
+              <th style={{ textAlign: 'right' }}>Link</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/50">
+          <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan="5" className="py-8 text-center text-slate-400">
+                <td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
                   Loading comments...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan="5" className="py-8 text-center text-slate-500">
+                <td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
                   No comments found for this view.
                 </td>
               </tr>
             ) : (
               rows.map((row, idx) => (
-                <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
-                  <td className="py-2.5 px-3 font-semibold uppercase text-slate-400">
+                <tr key={idx}>
+                  <td style={{ fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                     {row.platform}
                   </td>
-                  <td className="py-2.5 px-3">
-                    <span className="font-medium text-slate-200">{row.username || row.user_id}</span>
+                  <td className="td-user">
+                    {row.username || row.user_id}
                   </td>
-                  <td className="py-2.5 px-3 text-slate-200 max-w-xs break-words">
+                  <td className="td-comment">
                     {row.comment}
                   </td>
-                  <td className="py-2.5 px-3 text-rose-400 font-medium whitespace-nowrap">
+                  <td className="td-likes">
                     {row.likes ?? 0}
                   </td>
-                  <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                  <td className="td-link" style={{ textAlign: 'right' }}>
                     {row.post_url ? (
-                      <a
-                        href={row.post_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 hover:underline"
-                      >
+                      <a href={row.post_url} target="_blank" rel="noreferrer">
                         <span>Post</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     ) : (
-                      <span className="text-slate-600">-</span>
+                      <span style={{ color: '#555' }}>-</span>
                     )}
                   </td>
                 </tr>
@@ -259,17 +250,16 @@ export default function ResultsCard({ card }) {
         </table>
       </div>
 
-      {/* Pagination Controls */}
-      <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+      {/* Pagination Footer */}
+      <div className="pagination-footer">
         <span>Showing {rows.length} comments</span>
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             onClick={handlePrevPage}
             disabled={currentPage <= 1 || isLoading}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300"
+            className="page-btn"
           >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            <span>Prev</span>
+            <ChevronLeft className="w-3.5 h-3.5" style={{ display: 'inline', verticalAlign: 'middle' }} /> Prev
           </button>
           <span>
             {currentPage} / {totalPages}
@@ -277,10 +267,9 @@ export default function ResultsCard({ card }) {
           <button
             onClick={handleNextPage}
             disabled={currentPage >= totalPages || isLoading}
-            className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300"
+            className="page-btn"
           >
-            <span>Next</span>
-            <ChevronRight className="w-3.5 h-3.5" />
+            Next <ChevronRight className="w-3.5 h-3.5" style={{ display: 'inline', verticalAlign: 'middle' }} />
           </button>
         </div>
       </div>

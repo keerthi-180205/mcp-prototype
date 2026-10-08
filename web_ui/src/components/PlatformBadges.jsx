@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle2, AlertCircle } from 'lucide-react'
 
-export default function PlatformBadges() {
+export default function PlatformBadges({ mode = 'sidebar' }) {
   const [platforms, setPlatforms] = useState({
-    youtube: { available: false, reason: 'Checking status...' },
-    reddit: { available: false, reason: 'Checking status...' },
-    x: { available: false, reason: 'Checking status...' },
-    instagram: { available: false, reason: 'Checking status...' }
+    youtube: { available: true, reason: 'Ready' },
+    reddit: { available: true, reason: 'Ready' },
+    x: { available: true, reason: 'Ready' },
+    instagram: { available: false, reason: 'Apify Token Required' }
   })
 
   useEffect(() => {
@@ -38,31 +37,64 @@ export default function PlatformBadges() {
     instagram: { name: 'Instagram', color: '#ec4899' }
   }
 
+  if (mode === 'compact') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {Object.entries(platforms).map(([key, info]) => {
+          const meta = platformMeta[key] || { name: key, color: '#94a3b8' }
+          const isAvail = !!info.available
+          return (
+            <span
+              key={key}
+              title={`${meta.name}: ${info.reason || (isAvail ? 'Connected' : 'Unavailable')}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 7px',
+                borderRadius: '12px',
+                background: '#262626',
+                border: '1px solid #383838',
+                fontSize: '11px',
+                color: isAvail ? '#ececec' : '#777'
+              }}
+            >
+              <span className={`status-dot ${isAvail ? 'green' : 'gray'}`} />
+              <span>{meta.name}</span>
+            </span>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="platform-pills-list">
       {Object.entries(platforms).map(([key, info]) => {
         const meta = platformMeta[key] || { name: key, color: '#94a3b8' }
         const isAvail = !!info.available
         return (
           <div
             key={key}
+            className="platform-pill-row"
             title={info.reason || (isAvail ? 'Ready to collect' : 'Unavailable')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors cursor-help ${
-              isAvail
-                ? 'bg-slate-800/80 border-emerald-500/30 text-emerald-400'
-                : 'bg-slate-900/40 border-slate-700/50 text-slate-400 opacity-70'
-            }`}
           >
+            <div className="platform-pill-label">
+              <span
+                style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: meta.color,
+                  display: 'inline-block'
+                }}
+              />
+              <span>{meta.name}</span>
+            </div>
             <span
-              className="w-2 h-2 rounded-full inline-block"
-              style={{ backgroundColor: isAvail ? meta.color : '#64748b' }}
+              className={`status-dot ${isAvail ? 'green' : 'gray'}`}
+              title={isAvail ? 'Connected & Ready' : info.reason || 'Offline'}
             />
-            <span>{meta.name}</span>
-            {isAvail ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
-            )}
           </div>
         )
       })}

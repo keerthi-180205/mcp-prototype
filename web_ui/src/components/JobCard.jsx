@@ -14,7 +14,7 @@ export default function JobCard({ card, onShowResults }) {
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch(`/api/collect/${job_id}/status`)
+        const res = await fetch(`/api/collect/${encodeURIComponent(job_id)}/status`)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         if (isMounted) {
@@ -26,13 +26,11 @@ export default function JobCard({ card, onShowResults }) {
       } catch (err) {
         if (isMounted) {
           setError(err.message)
-          // Retry polling even if temporary glitch
           timerId = setTimeout(fetchStatus, 3000)
         }
       }
     }
 
-    // If initial card is not already terminal, start polling
     if (!TERMINAL_STATUSES.has(card.status)) {
       timerId = setTimeout(fetchStatus, 2000)
     }
@@ -47,7 +45,6 @@ export default function JobCard({ card, onShowResults }) {
   const isFinished = TERMINAL_STATUSES.has(status)
   const platforms = jobState.platforms || {}
 
-  // Calculate overall target and collected
   let totalTarget = 0
   let totalCollected = 0
   Object.values(platforms).forEach(pr => {
@@ -59,92 +56,88 @@ export default function JobCard({ card, onShowResults }) {
   const getStatusBadge = (s) => {
     switch (s) {
       case 'done':
-        return <span className="px-2 py-0.5 rounded text-xs bg-emerald-500/20 text-emerald-300 font-medium">Done</span>
+        return <span className="stage-badge done">Done</span>
       case 'harvesting':
         return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sky-500/20 text-sky-300 font-medium animate-pulse">
-            <Radio className="w-3 h-3 text-sky-400" /> Harvesting
+          <span className="stage-badge harvesting" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Radio className="w-3 h-3" /> Harvesting
           </span>
         )
       case 'discovering':
         return (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-indigo-500/20 text-indigo-300 font-medium">
-            <Loader2 className="w-3 h-3 animate-spin text-indigo-400" /> Discovering
+          <span className="stage-badge discovering" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Loader2 className="w-3 h-3 animate-spin" /> Discovering
           </span>
         )
       case 'failed':
-        return <span className="px-2 py-0.5 rounded text-xs bg-rose-500/20 text-rose-300 font-medium">Failed</span>
-      case 'skipped':
-        return <span className="px-2 py-0.5 rounded text-xs bg-slate-700/50 text-slate-400 font-medium">Skipped</span>
+        return <span className="stage-badge failed">Failed</span>
       default:
-        return <span className="px-2 py-0.5 rounded text-xs bg-slate-800 text-slate-400 font-medium">Pending</span>
+        return <span className="stage-badge" style={{ background: '#262626', color: '#999' }}>{s || 'Pending'}</span>
     }
   }
 
+  const getStatusBadgeClass = () => {
+    if (status === 'completed') return 'badge-completed'
+    if (status === 'running') return 'badge-running'
+    if (status === 'partial') return 'badge-partial'
+    return 'badge-pending'
+  }
+
   return (
-    <div className="mt-3 p-4 rounded-xl bg-slate-900/90 border border-slate-800 shadow-xl max-w-xl text-slate-100">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
+    <div className="llm-card job-card">
+      <div className="card-header-row">
+        <div className="card-title-group">
           {isFinished ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <CheckCircle2 className="w-5 h-5" style={{ color: '#10a37f' }} />
           ) : (
-            <Loader2 className="w-5 h-5 text-sky-400 animate-spin" />
+            <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#3b82f6' }} />
           )}
           <div>
-            <h4 className="font-semibold text-sm text-white">
-              Job {job_id} {isFinished ? `(${status})` : 'in progress'}
+            <h4 className="card-title">
+              Job #{job_id} {isFinished ? `(${status})` : '• In Progress'}
             </h4>
-            <p className="text-xs text-slate-400">{jobState.topic}</p>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              {jobState.topic}
+            </div>
           </div>
         </div>
-        <span
-          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${
-            status === 'completed'
-              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-              : status === 'partial'
-              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              : status === 'failed'
-              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-              : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-          }`}
-        >
+        <span className={`card-status-badge ${getStatusBadgeClass()}`}>
           {status}
         </span>
       </div>
 
-      {/* Overall Progress Bar */}
-      <div className="py-3">
-        <div className="flex justify-between text-xs font-medium text-slate-300 mb-1.5">
-          <span>Total Progress</span>
-          <span>{totalCollected.toLocaleString()} / {totalTarget.toLocaleString()} comments ({progressPct}%)</span>
+      {/* Overall Progress */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+          <span>Overall Collection Progress</span>
+          <span>
+            <strong style={{ color: '#fff' }}>{totalCollected.toLocaleString()}</strong> / {totalTarget.toLocaleString()} comments ({progressPct}%)
+          </span>
         </div>
-        <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+        <div className="progress-track-outer">
           <div
-            className={`h-full transition-all duration-500 ${
-              isFinished ? 'bg-emerald-500' : 'bg-gradient-to-r from-sky-500 to-indigo-500'
-            }`}
+            className="progress-track-fill"
             style={{ width: `${progressPct}%` }}
           />
         </div>
       </div>
 
       {/* Per-Platform Breakdown */}
-      <div className="space-y-2 py-2">
+      <div className="platforms-progress-list">
         {Object.entries(platforms).map(([plat, pr]) => {
           const collected = pr.comments_collected || 0
           const target = pr.target || 0
           const posts = pr.posts_processed || 0
           return (
-            <div
-              key={plat}
-              className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/50 flex items-center justify-between text-xs"
-            >
-              <div className="flex items-center gap-2">
-                <span className="font-semibold uppercase text-slate-200">{plat}</span>
-                <span className="text-slate-400">({posts} posts searched)</span>
+            <div key={plat} className="platform-progress-item">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="platform-tag">{plat}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                  ({posts} posts searched)
+                </span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="font-medium text-slate-200">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '13px' }}>
                   {collected.toLocaleString()} / {target.toLocaleString()}
                 </span>
                 {getStatusBadge(pr.status)}
@@ -155,18 +148,19 @@ export default function JobCard({ card, onShowResults }) {
       </div>
 
       {error && (
-        <div className="mt-2 text-xs text-rose-400 flex items-center gap-1">
-          <AlertCircle className="w-3.5 h-3.5" />
-          <span>Polling error: {error}</span>
+        <div style={{ color: '#ef4444', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <AlertCircle className="w-4 h-4" />
+          <span>Status connection error: {error}</span>
         </div>
       )}
 
       {/* Completion CTA */}
       {isFinished && onShowResults && (
-        <div className="mt-3 pt-3 border-t border-slate-800 flex justify-end">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '6px' }}>
           <button
             onClick={() => onShowResults(job_id)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition-all shadow-md"
+            className="btn-confirm-start"
+            style={{ flex: 'none', padding: '8px 16px', fontSize: '13px' }}
           >
             <BarChart2 className="w-4 h-4" />
             <span>View Full Results</span>
