@@ -780,11 +780,12 @@ async def research_instagram_topic(
     query: str,
     max_posts: int = 5,
     max_comments_per_post: int = 10,
-) -> str:
+) -> Dict[str, Any]:
     """End-to-end Instagram topic research demo.
 
     Searches public Instagram posts/reels for a topic query, extracts their public URLs,
-    fetches comments for each discovered post, and returns a text summary sorted by top comment likes.
+    fetches comments for each discovered post, and returns the structured results plus a
+    text summary (under "summary") sorted by top comment likes.
     """
     try:
         research_result = await instagram_service.research_topic(
@@ -816,12 +817,14 @@ async def research_instagram_topic(
             output.append(f"   Top Comment Likes: {likes}")
             output.append(f"   Top Comment: {comment_text}")
             output.append("")
-            
-        return "\n".join(output)
+
+        payload = research_result.model_dump()
+        payload["summary"] = "\n".join(output)
+        return payload
     except Exception as exc:
         import logging
         logging.getLogger(__name__).error("Error in research_instagram_topic", exc_info=True)
-        return f"Error during research: {str(exc)}"
+        return {"status": "error", "query": query, "message": f"Error during research: {exc}"}
 
 @mcp.tool()
 async def search_social_trending_comments(

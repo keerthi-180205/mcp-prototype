@@ -58,46 +58,15 @@ class AgentReachAdapter:
         max_tokens: Optional[int] = None,
         timeout: float = 30.0,
     ) -> Optional[Dict[str, Any]]:
+        """Deprecated no-op.
+
+        Agent Reach only installs and health-checks its tools ('agent-reach doctor'); it has no
+        'agent-reach get ...' command. Callers must invoke the underlying tools directly
+        (yt-dlp, rdt, twitter). Always returns None.
         """
-        Execute an agent-reach command with JSON output format.
-        Example: agent-reach get youtube.info <url> --json
-        """
-        if not self.is_installed():
-            logger.warning("agent-reach not installed, command '%s' skipped", channel_cmd)
-            return None
-
-        cmd = [self.executable, "get", channel_cmd, target, "--json"]
-        if limit is not None:
-            cmd.extend(["--limit", str(limit)])
-        if max_tokens is not None:
-            cmd.extend(["--max-tokens", str(max_tokens)])
-
-        logger.info("Executing Agent Reach command: %s", " ".join(cmd))
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-            out_str = stdout.decode("utf-8", errors="replace").strip()
-            err_str = stderr.decode("utf-8", errors="replace").strip()
-
-            if proc.returncode != 0:
-                logger.error("Agent Reach command failed (code %d): %s", proc.returncode, err_str)
-                return None
-
-            if not out_str:
-                return {}
-
-            try:
-                return json.loads(out_str)
-            except json.JSONDecodeError:
-                # Some commands may output plain text or markdown
-                return {"raw_text": out_str}
-        except asyncio.TimeoutError:
-            logger.error("Agent Reach command '%s' timed out after %ds", channel_cmd, timeout)
-            return None
-        except Exception as e:
-            logger.error("Exception executing Agent Reach command '%s': %s", channel_cmd, e)
-            return None
+        logger.warning(
+            "AgentReachAdapter.execute_command('%s') is unsupported: agent-reach has no 'get' command; "
+            "call the underlying tool directly",
+            channel_cmd,
+        )
+        return None
