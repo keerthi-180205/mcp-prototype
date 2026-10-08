@@ -42,6 +42,9 @@ from server.models import (
 )
 from server.services.instagram import InstagramService, get_instagram_service
 from server.storage.sqlite import get_social_records, get_social_stats, save_social_records
+from server.collection.jobs import CollectionJobManager, JobError
+from server.collection.export import export_job
+from server.chat.assistant import handle_assistant_message, get_platforms_availability
 
 load_dotenv()
 logger = logging.getLogger("mcp_server.web")
@@ -359,28 +362,178 @@ async def search_topic_endpoint(request: Request):
     return JSONResponse(res)
 
 
+# ---------------------------------------------------------------------------
+# Comment Collection REST API & Assistant Chat Endpoint
+# ---------------------------------------------------------------------------
+
+collection_manager = CollectionJobManager()
+
+
+def _get_manager(request: Request) -> CollectionJobManager:
+    return getattr(request.app.state, "collection_manager", collection_manager)
+
+
+async def collect_platforms_endpoint(request: Request):
+    """Retrieve platform availability booleans and reasons. Never returns secrets."""
+    return JSONResponse(get_platforms_availability())
+
+
+async def collect_start_endpoint(request: Request):
+    """Start an async background comment collection job."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    topic = body.get("topic", "")
+    platforms = body.get("platforms")
+    target_comments = int(body.get("target_comments", body.get("target_comments_per_platform", 500)))
+    max_posts = int(body.get("max_posts", body.get("max_posts_per_platform", 30)))
+    max_minutes = float(body.get("max_minutes", 10.0))
+
+    mgr = _get_manager(request)
+    try:
+        res = mgr.start(
+            topic=topic,
+            platforms=platforms,
+            target_comments=target_comments,
+            max_posts=max_posts,
+            max_minutes=max_minutes,
+        )
+        return JSONResponse(res)
+    except JobError as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=400)
+    except Exception as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+
+
+async def collect_status_endpoint(request: Request):
+    """Progress of a comment collection job: per-platform status, posts, comments."""
+    job_id = request.path_params["job_id"]
+    mgr = _get_manager(request)
+    try:
+        res = mgr.status(job_id)
+        return JSONResponse(res)
+    except JobError as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=404)
+    except Exception as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+
+
+async def collect_results_endpoint(request: Request):
+    """Summary plus paginated collected comment rows."""
+    job_id = request.path_params["job_id"]
+    try:
+        page = int(request.query_params.get("page", 1))
+    except (ValueError, TypeError):
+        page = 1
+    try:
+        page_size = int(request.query_params.get("page_size", 25))
+    except (ValueError, TypeError):
+        page_size = 25
+    platform = request.query_params.get("platform")
+
+    mgr = _get_manager(request)
+    try:
+        res = mgr.results(job_id, page=page, page_size=page_size, platform=platform)
+        return JSONResponse(res)
+    except JobError as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=404)
+    except Exception as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=500)
+
+
+async def collect_export_endpoint(request: Request):
+    """Export collected comments as a downloadable file attachment (CSV or JSON)."""
+    job_id = request.path_params["job_id"]
+    fmt = request.query_params.get("format", "csv").lower().strip()
+    if fmt not in ("csv", "json"):
+        return JSONResponse({"status": "error", "message": "format must be 'csv' or 'json'"}, status_code=400)
+
+    mgr = _get_manager(request)
+    try:
+        mgr.status(job_id)  # Validate job exists
+        res = export_job(job_id, fmt=fmt, db_path=mgr.db_path)
+        file_path = str(res["path"])
+        filename = f"{job_id}.{fmt}"
+        media_type = "text/csv; charset=utf-8" if fmt == "csv" else "application/json"
+        return FileResponse(
+            path=file_path,
+            media_type=media_type,
+            filename=filename,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    except JobError as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=404)
+    except Exception as exc:
+        return JSONResponse({"status": "error", "message": str(exc)}, status_code=400)
+
+
+async def assistant_message_endpoint(request: Request):
+    """Conversational comment collection assistant endpoint."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    session_id = body.get("session_id", "").strip()
+    text = body.get("text", "")
+    action = body.get("action")
+
+    mgr = _get_manager(request)
+    res = await handle_assistant_message(
+        session_id=session_id,
+        text=text,
+        action=action,
+        manager=mgr,
+    )
+    return JSONResponse(res)
+
+
 # Starlette app configuration
 routes = [
     Route("/", endpoint=index, methods=["GET"]),
+    Route("/api/collect/platforms", endpoint=collect_platforms_endpoint, methods=["GET"]),
+    Route("/api/collect/start", endpoint=collect_start_endpoint, methods=["POST"]),
+    Route("/api/collect/{job_id}/status", endpoint=collect_status_endpoint, methods=["GET"]),
+    Route("/api/collect/{job_id}/results", endpoint=collect_results_endpoint, methods=["GET"]),
+    Route("/api/collect/{job_id}/export", endpoint=collect_export_endpoint, methods=["GET"]),
+    Route("/api/assistant/message", endpoint=assistant_message_endpoint, methods=["POST"]),
     Route("/api/chat", endpoint=chat_endpoint, methods=["POST"]),
     Route("/api/platforms/status", endpoint=platforms_status_endpoint, methods=["GET"]),
     Route("/api/platforms/connect", endpoint=platforms_connect_endpoint, methods=["POST"]),
     Route("/api/history", endpoint=history_endpoint, methods=["GET"]),
     Route("/api/search_topic", endpoint=search_topic_endpoint, methods=["POST"]),
     Mount("/static", app=StaticFiles(directory=STATIC_DIR), name="static"),
-    Mount("/assets", app=StaticFiles(directory=os.path.join(WORKSPACE_ROOT, "web_ui", "dist", "assets")), name="assets"),
 ]
 
+dist_assets_dir = os.path.join(WORKSPACE_ROOT, "web_ui", "dist", "assets")
+if os.path.isdir(dist_assets_dir):
+    routes.append(Mount("/assets", app=StaticFiles(directory=dist_assets_dir), name="assets"))
+
+# Explicit CORS origins
+cors_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+extra_cors = os.getenv("CORS_ORIGINS", "")
+if extra_cors:
+    for origin in extra_cors.split(","):
+        cleaned = origin.strip()
+        if cleaned and cleaned not in cors_origins:
+            cors_origins.append(cleaned)
+
 middleware = [
-    Middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]),
+    Middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["*"], allow_headers=["*"]),
 ]
 
 app = Starlette(routes=routes, middleware=middleware)
 
 if __name__ == "__main__":
     import uvicorn
+    host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", 8080))
     print(f"\n=======================================================")
-    print(f"🚀 Universal Social Intelligence Chatbot running at: http://localhost:{port}")
+    print(f"🚀 Universal Social Intelligence Chatbot running at: http://{host}:{port}")
     print(f"=======================================================\n")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host=host, port=port)
