@@ -12,8 +12,8 @@ from server.providers.social.instagram import InstagramSocialProvider
 from server.providers.social.stubs import (
     FacebookSocialProvider,
     LinkedInSocialProvider,
-    XTwitterSocialProvider,
 )
+from server.providers.social.x_twitter import XTwitterSocialProvider
 from server.providers.social.reddit import RedditSocialProvider
 from server.providers.social.web_rss import WebRSSSocialProvider
 from server.providers.social.youtube import YouTubeSocialProvider
