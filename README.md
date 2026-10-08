@@ -319,6 +319,43 @@ often finish below the target (the status reports `no_more_candidates` or `budge
 Live smoke tests: `python scripts/collect_live.py --platform youtube --target 500` (one platform) and
 `python scripts/collect_job_live.py --platforms youtube reddit x instagram` (full job via the tool functions).
 
+### Chat Interface & Web Application
+
+A conversational UI that allows users to request comments in plain English, enforces server-side plan confirmation before running jobs, displays live progress polling inside the chat stream, and presents paginated results with CSV/JSON exports.
+
+#### 1. Building the Web UI
+```bash
+cd web_ui
+npm install
+npm run build
+```
+
+#### 2. Starting the Server
+```bash
+python web/server.py
+# Or with custom host/port:
+HOST=127.0.0.1 PORT=8080 python web/server.py
+```
+Open `http://localhost:8080` in your web browser.
+
+#### 3. Conversational Examples
+- **Start collection:** `"get me 500 comments about Asian Games 2026 from YouTube and Reddit"`
+- **Confirmation gate:** The assistant presents a Plan Card with the topic, target per platform, and safety notes. Jobs start **only** after clicking "Confirm & Start" or typing `"yes"`.
+- **Live status:** `"what's the status?"` polls progress every 2 seconds.
+- **Filter results:** `"show only reddit"` or `"show only youtube"`
+- **Explanations:** `"why is instagram so low?"` explains stop reasons (e.g., ran out of matching posts, cost caps reached).
+- **Download results:** `"export as csv"` or `"export as json"`.
+
+#### 4. REST Endpoints
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/collect/platforms` | Real-time platform availability (`available: bool, reason: str`). Never exposes secrets. |
+| `POST` | `/api/collect/start` | Starts background collection job (`topic, platforms, target_comments, max_posts, max_minutes`). |
+| `GET` | `/api/collect/{job_id}/status` | Live status, per-platform stage, posts processed, and comments count. |
+| `GET` | `/api/collect/{job_id}/results` | Paginated comments with optional `platform` filter, `page`, `page_size`. |
+| `GET` | `/api/collect/{job_id}/export` | Direct file attachment download (`?format=csv` with UTF-8 BOM or `?format=json`). |
+| `POST` | `/api/assistant/message` | Conversational assistant message dispatch (`session_id, text, action?`). |
+
 ## Instagram + Apify Demo
 
 > **Notice**: This is an initial **proof-of-concept** for public-data acquisition. It strictly queries public posts/reels and public comments returned by Apify Actors without bypassing access controls, accessing private accounts or DMs, or using browser session tokens. Commenter data is treated purely as public interaction metadata; no identity enrichment or sensitive classification is performed.
