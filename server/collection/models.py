@@ -1,5 +1,6 @@
 """Data models for the comment-collection pipeline."""
 
+import os
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -68,9 +69,17 @@ class CollectionLimits(BaseModel):
     max_seconds: float = 600.0
     candidates_per_platform: int = 40
     min_relevance: float = 0.5
-    # Instagram / Apify hard caps (protect credits)
-    apify_max_comments_per_query: int = 1500
-    apify_max_cost_usd: float = 1.0
+    # Instagram / Apify hard caps per query (protect credits). Env-driven on purpose: the chatbot
+    # cannot raise them through a tool argument.
+    apify_max_comments_per_query: int = Field(
+        default_factory=lambda: int(os.getenv("APIFY_MAX_COMMENTS_PER_QUERY", "1500"))
+    )
+    apify_max_cost_usd: float = Field(
+        default_factory=lambda: float(os.getenv("APIFY_MAX_COST_PER_QUERY_USD", "0.5"))
+    )
+    instagram_discovery_posts: int = Field(
+        default_factory=lambda: int(os.getenv("INSTAGRAM_DISCOVERY_POSTS", "120"))
+    )
 
 
 class PlatformProgress(BaseModel):

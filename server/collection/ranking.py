@@ -2,6 +2,7 @@
 
 import datetime
 import math
+import re
 from typing import Iterable, List, Optional
 
 from server.collection.models import PostCandidate
@@ -20,7 +21,16 @@ def relevance_score(topic: str, *texts: Optional[str]) -> float:
     if not toks:
         return 0.0
     hay_tokens = set(tokenize(haystack))
-    return sum(1 for t in toks if t in hay_tokens) / len(toks)
+    score = sum(1 for t in toks if t in hay_tokens) / len(toks)
+
+    # Hashtags squash words together ("#asiangames2026"): compare the squashed forms too.
+    squashed = re.sub(r"[\W_]+", "", haystack)
+    if "".join(toks) in squashed:
+        return 1.0
+    core = "".join(t for t in toks if not re.fullmatch(r"(19|20)\d{2}", t))
+    if core and core in squashed:
+        score = max(score, 0.8)
+    return score
 
 
 def parse_iso(value: Optional[str]) -> Optional[datetime.datetime]:

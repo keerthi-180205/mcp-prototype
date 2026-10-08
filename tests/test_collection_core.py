@@ -82,7 +82,9 @@ async def test_planner_merges_gemini(monkeypatch):
 # ---------------- ranking ----------------
 def test_relevance_and_recency():
     assert relevance_score("Asian Games 2026", "Asian Games 2026 medal tally") == 1.0
-    assert relevance_score("Asian Games 2026", "asian games 2018") == pytest.approx(2 / 3)
+    assert relevance_score("Asian Games 2026", "asian games 2018") == pytest.approx(0.8)  # core words, other year
+    assert relevance_score("Asian Games 2026", "Go team! #asiangames2026 #india") == 1.0  # squashed hashtag
+    assert relevance_score("Asian Games 2026", "#asiangames final") == pytest.approx(0.8)
     assert relevance_score("Asian Games 2026", "cooking pasta") == 0.0
     now = datetime.datetime(2026, 10, 8, tzinfo=datetime.timezone.utc)
     assert recency_factor("2026-10-08T00:00:00Z", now) > recency_factor("2025-10-08T00:00:00Z", now)
