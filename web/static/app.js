@@ -96,14 +96,25 @@ document.addEventListener('DOMContentLoaded', () => {
     function addUserMessage(text) {
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message user-message';
-        msgDiv.innerHTML = `
-            <div class="avatar">You</div>
-            <div class="message-content">
-                <div class="message-bubble">
-                    <p>${escapeHtml(text)}</p>
-                </div>
-            </div>
-        `;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.textContent = 'You';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+
+        const p = document.createElement('p');
+        p.textContent = text;
+
+        bubble.appendChild(p);
+        content.appendChild(bubble);
+        msgDiv.appendChild(avatar);
+        msgDiv.appendChild(content);
+
         messagesContainer.appendChild(msgDiv);
         scrollToBottom();
     }
@@ -167,79 +178,159 @@ document.addEventListener('DOMContentLoaded', () => {
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message assistant-message';
 
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.textContent = 'AI';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+        content.style.maxWidth = '100%';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.style.maxWidth = '100%';
+
         const comments = data.comments || [];
         const totalComments = comments.length;
         const reachedStr = data.platform || (data.platforms_reached ? data.platforms_reached.join(', ') : 'Universal Reach');
 
-        let tableBodyHtml = '';
+        const p = document.createElement('p');
+        p.style.fontSize = '0.95rem';
+        p.style.marginBottom = '12px';
+        p.textContent = data.chatbot_message || `Collected ${totalComments} public comments across ${reachedStr}:`;
+        bubble.appendChild(p);
+
+        const tableContainer = document.createElement('div');
+        tableContainer.style.overflowX = 'auto';
+        tableContainer.style.background = 'rgba(15, 23, 42, 0.7)';
+        tableContainer.style.borderRadius = '10px';
+        tableContainer.style.border = '1px solid var(--border)';
+
+        const table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+        table.style.fontSize = '0.85rem';
+        table.style.color = '#cbd5e1';
+
+        const thead = document.createElement('thead');
+        const headRow = document.createElement('tr');
+        headRow.style.borderBottom = '1px solid var(--border)';
+        headRow.style.background = 'rgba(0,0,0,0.3)';
+        headRow.style.textAlign = 'left';
+
+        ['User ID', 'Comment', 'Platform Name', 'Source Link'].forEach(headerText => {
+            const th = document.createElement('th');
+            th.style.padding = '10px 14px';
+            th.textContent = headerText;
+            headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
         if (comments.length === 0) {
-            tableBodyHtml = `
-                <tr>
-                    <td colspan="4" style="padding: 24px; text-align: center; color: #94a3b8;">
-                        No public comments found across reachable platforms. Try a broader topic term.
-                    </td>
-                </tr>
-            `;
+            const emptyRow = document.createElement('tr');
+            const emptyTd = document.createElement('td');
+            emptyTd.colSpan = 4;
+            emptyTd.style.padding = '24px';
+            emptyTd.style.textAlign = 'center';
+            emptyTd.style.color = '#94a3b8';
+            emptyTd.textContent = 'No public comments found across reachable platforms. Try a broader topic term.';
+            emptyRow.appendChild(emptyTd);
+            tbody.appendChild(emptyRow);
         } else {
-            tableBodyHtml = comments.map(c => {
-                const userId = c.user_id || c.username || 'anonymous';
-                const commentText = c.comment || c.comment_text || '';
-                const platformName = c.platform || 'Social';
-                const sourceUrl = c.link || c.post_url || '';
-                const badgeStyle = getPlatformStyle(platformName);
+            comments.forEach(c => {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
 
-                return `
-                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
-                        <td style="padding: 10px 14px; font-weight: 600; color: #93c5fd; white-space: nowrap; vertical-align: top;">
-                            ${escapeHtml(userId)}
-                            ${c.likes > 0 ? `<div style="font-size: 0.72rem; color: #64748b; font-weight: normal; margin-top: 2px;">❤️ ${c.likes.toLocaleString()} likes</div>` : ''}
-                        </td>
-                        <td style="padding: 10px 14px; line-height: 1.5; color: #e2e8f0; vertical-align: top;">
-                            ${escapeHtml(commentText)}
-                        </td>
-                        <td style="padding: 10px 14px; text-align: center; vertical-align: top; white-space: nowrap;">
-                            <span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; ${badgeStyle}">
-                                ${escapeHtml(platformName)}
-                            </span>
-                        </td>
-                        <td style="padding: 10px 14px; text-align: center; vertical-align: top; white-space: nowrap;">
-                            ${sourceUrl ? `
-                                <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 4px; color: #60a5fa; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; text-decoration: none;">
-                                    View Source ↗
-                                </a>
-                            ` : '<span style="color: #64748b; font-size: 0.75rem;">N/A</span>'}
-                        </td>
-                    </tr>
-                `;
-            }).join('');
+                // User TD
+                const tdUser = document.createElement('td');
+                tdUser.style.padding = '10px 14px';
+                tdUser.style.fontWeight = '600';
+                tdUser.style.color = '#93c5fd';
+                tdUser.style.whiteSpace = 'nowrap';
+                tdUser.style.verticalAlign = 'top';
+                tdUser.textContent = c.user_id || c.username || 'anonymous';
+                if (c.likes > 0) {
+                    const likesDiv = document.createElement('div');
+                    likesDiv.style.fontSize = '0.72rem';
+                    likesDiv.style.color = '#64748b';
+                    likesDiv.style.fontWeight = 'normal';
+                    likesDiv.style.marginTop = '2px';
+                    likesDiv.textContent = `❤️ ${c.likes.toLocaleString()} likes`;
+                    tdUser.appendChild(likesDiv);
+                }
+                tr.appendChild(tdUser);
+
+                // Comment TD
+                const tdComment = document.createElement('td');
+                tdComment.style.padding = '10px 14px';
+                tdComment.style.lineHeight = '1.5';
+                tdComment.style.color = '#e2e8f0';
+                tdComment.style.verticalAlign = 'top';
+                tdComment.textContent = c.comment || c.comment_text || '';
+                tr.appendChild(tdComment);
+
+                // Platform TD
+                const tdPlat = document.createElement('td');
+                tdPlat.style.padding = '10px 14px';
+                tdPlat.style.textAlign = 'center';
+                tdPlat.style.verticalAlign = 'top';
+                tdPlat.style.whiteSpace = 'nowrap';
+
+                const platBadge = document.createElement('span');
+                platBadge.style.display = 'inline-block';
+                platBadge.style.padding = '2px 8px';
+                platBadge.style.borderRadius = '6px';
+                platBadge.style.fontSize = '0.75rem';
+                platBadge.style.fontWeight = '600';
+                platBadge.style.cssText = getPlatformStyle(c.platform);
+                platBadge.textContent = c.platform || 'Social';
+                tdPlat.appendChild(platBadge);
+                tr.appendChild(tdPlat);
+
+                // Source Link TD
+                const tdLink = document.createElement('td');
+                tdLink.style.padding = '10px 14px';
+                tdLink.style.textAlign = 'center';
+                tdLink.style.verticalAlign = 'top';
+                tdLink.style.whiteSpace = 'nowrap';
+                const sourceUrl = c.link || c.post_url;
+                if (sourceUrl) {
+                    const a = document.createElement('a');
+                    a.href = sourceUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.style.display = 'inline-flex';
+                    a.style.alignItems = 'center';
+                    a.style.gap = '4px';
+                    a.style.color = '#60a5fa';
+                    a.style.background = 'rgba(59, 130, 246, 0.1)';
+                    a.style.border = '1px solid rgba(59, 130, 246, 0.25)';
+                    a.style.padding = '3px 8px';
+                    a.style.borderRadius = '6px';
+                    a.style.fontSize = '0.75rem';
+                    a.style.textDecoration = 'none';
+                    a.textContent = 'View Source ↗';
+                    tdLink.appendChild(a);
+                } else {
+                    const spanNa = document.createElement('span');
+                    spanNa.style.color = '#64748b';
+                    spanNa.style.fontSize = '0.75rem';
+                    spanNa.textContent = 'N/A';
+                    tdLink.appendChild(spanNa);
+                }
+                tr.appendChild(tdLink);
+
+                tbody.appendChild(tr);
+            });
         }
-
-        msgDiv.innerHTML = `
-            <div class="avatar">AI</div>
-            <div class="message-content" style="max-width: 100%;">
-                <div class="message-bubble" style="max-width: 100%;">
-                    <p style="font-size: 0.95rem; margin-bottom: 12px;">
-                        ${escapeHtml(data.chatbot_message || `Collected ${totalComments} public comments across ${reachedStr}:`)}
-                    </p>
-
-                    <div style="overflow-x: auto; background: rgba(15, 23, 42, 0.7); border-radius: 10px; border: 1px solid var(--border);">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; color: #cbd5e1;">
-                            <thead>
-                                <tr style="border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.3); text-align: left;">
-                                    <th style="padding: 10px 14px; width: 180px;">User ID</th>
-                                    <th style="padding: 10px 14px;">Comment</th>
-                                    <th style="padding: 10px 14px; text-align: center; width: 130px;">Platform Name</th>
-                                    <th style="padding: 10px 14px; text-align: center; width: 140px;">Source Link</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${tableBodyHtml}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        `;
+        table.appendChild(tbody);
+        tableContainer.appendChild(table);
+        bubble.appendChild(tableContainer);
+        content.appendChild(bubble);
+        msgDiv.appendChild(avatar);
+        msgDiv.appendChild(content);
 
         messagesContainer.appendChild(msgDiv);
         scrollToBottom();
@@ -248,15 +339,36 @@ document.addEventListener('DOMContentLoaded', () => {
     function addErrorMessage(errorText) {
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message assistant-message';
-        msgDiv.innerHTML = `
-            <div class="avatar" style="background: #ef4444;">!</div>
-            <div class="message-content">
-                <div class="message-bubble" style="border-color: #ef4444;">
-                    <p style="color: #fca5a5;"><strong>Error during intelligence acquisition:</strong></p>
-                    <p style="font-size: 0.88rem; margin-top: 6px;">${escapeHtml(errorText)}</p>
-                </div>
-            </div>
-        `;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.style.background = '#ef4444';
+        avatar.textContent = '!';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.style.borderColor = '#ef4444';
+
+        const pTitle = document.createElement('p');
+        pTitle.style.color = '#fca5a5';
+        const strong = document.createElement('strong');
+        strong.textContent = 'Error during intelligence acquisition:';
+        pTitle.appendChild(strong);
+
+        const pDesc = document.createElement('p');
+        pDesc.style.fontSize = '0.88rem';
+        pDesc.style.marginTop = '6px';
+        pDesc.textContent = errorText;
+
+        bubble.appendChild(pTitle);
+        bubble.appendChild(pDesc);
+        content.appendChild(bubble);
+        msgDiv.appendChild(avatar);
+        msgDiv.appendChild(content);
+
         messagesContainer.appendChild(msgDiv);
         scrollToBottom();
     }
