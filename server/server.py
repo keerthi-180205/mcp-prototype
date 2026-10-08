@@ -78,6 +78,8 @@ from server.services.instagram import (
     InstagramValidationError,
 )
 from server.models import NormalizedSocialRecord
+from server.collection.export import export_job
+from server.collection.jobs import CollectionJobManager, JobError
 from server.services.filtering import (
     filter_by_relevance,
     generate_social_report as create_social_report,
@@ -780,11 +782,12 @@ async def research_instagram_topic(
     query: str,
     max_posts: int = 5,
     max_comments_per_post: int = 10,
-) -> str:
+) -> Dict[str, Any]:
     """End-to-end Instagram topic research demo.
 
     Searches public Instagram posts/reels for a topic query, extracts their public URLs,
-    fetches comments for each discovered post, and returns a text summary sorted by top comment likes.
+    fetches comments for each discovered post, and returns the structured results plus a
+    text summary (under "summary") sorted by top comment likes.
     """
     try:
         research_result = await instagram_service.research_topic(
@@ -816,12 +819,14 @@ async def research_instagram_topic(
             output.append(f"   Top Comment Likes: {likes}")
             output.append(f"   Top Comment: {comment_text}")
             output.append("")
-            
-        return "\n".join(output)
+
+        payload = research_result.model_dump()
+        payload["summary"] = "\n".join(output)
+        return payload
     except Exception as exc:
         import logging
         logging.getLogger(__name__).error("Error in research_instagram_topic", exc_info=True)
-        return f"Error during research: {str(exc)}"
+        return {"status": "error", "query": query, "message": f"Error during research: {exc}"}
 
 @mcp.tool()
 async def search_social_trending_comments(
@@ -1151,6 +1156,82 @@ async def search_social_topic(
         min_relevance=min_relevance,
         auto_store=auto_store,
     )
+
+
+
+# ---------------------------------------------------------------------------
+# Comment collection (Instagram / YouTube / Reddit / X) as async background jobs
+# ---------------------------------------------------------------------------
+collection_jobs = CollectionJobManager()
+
+
+def _job_error(exc: Exception) -> Dict[str, Any]:
+    return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+async def start_comment_collection(
+    topic: str,
+    platforms: Optional[List[str]] = None,
+    target_comments: int = 500,
+    max_posts_per_platform: int = 30,
+    max_minutes: int = 10,
+) -> Dict[str, Any]:
+    """Start collecting COMMENTERS (username/ID + comment text) for a topic across social platforms.
+
+    Finds the most relevant posts/videos/threads about `topic` on instagram, youtube, reddit and x,
+    opens their comment sections and keeps going through more posts until `target_comments` per
+    platform is reached or a limit is hit. Runs in the background and returns a job_id immediately;
+    poll get_collection_status(job_id), then read get_collection_results(job_id).
+    """
+    try:
+        return collection_jobs.start(
+            topic=topic,
+            platforms=platforms,
+            target_comments=target_comments,
+            max_posts=max_posts_per_platform,
+            max_minutes=max_minutes,
+        )
+    except JobError as exc:
+        return _job_error(exc)
+
+
+@mcp.tool()
+def get_collection_status(job_id: str) -> Dict[str, Any]:
+    """Progress of a comment collection job: per-platform status, posts processed, comments collected."""
+    try:
+        return collection_jobs.status(job_id)
+    except JobError as exc:
+        return _job_error(exc)
+
+
+@mcp.tool()
+def get_collection_results(
+    job_id: str,
+    page: int = 1,
+    page_size: int = 25,
+    platform: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Summary (counts per platform, top comments) plus one page of collected comment rows.
+
+    Rows have: platform, username, user_id, comment, likes, created_at, post_url. Use
+    export_collection_results for the complete data set instead of paging through everything.
+    """
+    try:
+        return collection_jobs.results(job_id, page=page, page_size=page_size, platform=platform)
+    except JobError as exc:
+        return _job_error(exc)
+
+
+@mcp.tool()
+def export_collection_results(job_id: str, format: str = "csv") -> Dict[str, Any]:
+    """Export ALL collected comments of a job to a CSV or JSON file and return the file path."""
+    try:
+        collection_jobs.status(job_id)  # validates the job id
+        result = export_job(job_id, format, db_path=collection_jobs.db_path)
+        return {"status": "ok", "job_id": job_id, **result}
+    except (JobError, ValueError) as exc:
+        return _job_error(exc)
 
 
 if __name__ == "__main__":

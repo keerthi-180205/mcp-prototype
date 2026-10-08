@@ -328,6 +328,7 @@ async def test_mcp_social_tools():
 async def test_instagram_provider_abstraction_and_query_discovery():
     """Phase 3 & Phase 4 test: InstagramProvider abstraction and natural language query discovery without URL."""
     from unittest.mock import AsyncMock
+    from server.config import Settings
     from server.providers.social.instagram import InstagramSocialProvider
     from server.models import InstagramPost, InstagramAuthor as IGAuthor
     from server.services.instagram import InstagramValidationError
@@ -350,6 +351,9 @@ async def test_instagram_provider_abstraction_and_query_discovery():
     ]
 
     provider = InstagramSocialProvider(service=mock_service)
+    # The service is mocked, but is_available() reads the token from settings; pin a dummy one so the
+    # test does not depend on APIFY_API_TOKEN being set in the environment (it is unset in CI).
+    provider.settings = Settings(apify_api_token="test_token")
     assert provider.platform_name == "instagram"
     assert provider.provider_name == "apify"
 
