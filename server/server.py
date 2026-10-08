@@ -1,3 +1,4 @@
+import shutil
 from typing import Any, Dict, List, Optional
 
 from server.config import get_settings
@@ -152,6 +153,10 @@ def readiness_check() -> Dict[str, Any]:
             "apify": {
                 "status": "ready" if apify_auth == "configured" else "optional_unconfigured",
                 "authentication": apify_auth,
+            },
+            "youtube": {
+                "status": "ready" if shutil.which("yt-dlp") else "optional_unconfigured",
+                "backend": "yt-dlp",
             },
         }
 
@@ -775,11 +780,11 @@ async def research_instagram_topic(
     query: str,
     max_posts: int = 5,
     max_comments_per_post: int = 10,
-) -> Dict[str, Any]:
+) -> str:
     """End-to-end Instagram topic research demo.
 
     Searches public Instagram posts/reels for a topic query, extracts their public URLs,
-    fetches comments for each discovered post, and returns a unified structured JSON report.
+    fetches comments for each discovered post, and returns a text summary sorted by top comment likes.
     """
     try:
         research_result = await instagram_service.research_topic(
@@ -787,9 +792,112 @@ async def research_instagram_topic(
             max_posts=max_posts,
             max_comments_per_post=max_comments_per_post,
         )
-        return research_result.model_dump()
+        
+        scored_posts = []
+        for result in research_result.results:
+            max_likes = 0
+            top_comment_text = "No comments found"
+            if result.comments:
+                # Find comment with most likes
+                top_c = max(result.comments, key=lambda c: c.like_count or 0)
+                max_likes = top_c.like_count or 0
+                top_comment_text = top_c.text or ""
+                
+            scored_posts.append((max_likes, result.content, top_comment_text))
+            
+        # Sort descending by comment likes
+        scored_posts.sort(key=lambda x: x[0], reverse=True)
+        
+        output = [f"Top trending Instagram posts for '{query}' based on comment likes:\n"]
+        for idx, (likes, content, comment_text) in enumerate(scored_posts, 1):
+            caption_short = (content.caption[:100] + "...") if content.caption else "No caption"
+            output.append(f"{idx}. URL: {content.url}")
+            output.append(f"   Caption: {caption_short}")
+            output.append(f"   Top Comment Likes: {likes}")
+            output.append(f"   Top Comment: {comment_text}")
+            output.append("")
+            
+        return "\n".join(output)
     except Exception as exc:
-        return _handle_instagram_error(exc)
+        import logging
+        logging.getLogger(__name__).error("Error in research_instagram_topic", exc_info=True)
+        return f"Error during research: {str(exc)}"
+
+@mcp.tool()
+async def search_social_trending_comments(
+    query: str,
+    platform: str = "reddit",
+    top_content: int = 20,
+    top_comments: int = 1000,
+) -> Dict[str, Any]:
+    """Discover trending content on a social platform (e.g., youtube, reddit, instagram) for a query, 
+    extract public comments across all posts, and return the top ranking comments based on likes.
+    
+    This tool dynamically searches for 'query', finds up to 'top_content' trending/relevant
+    posts, retrieves public comments from all of them, deduplicates, sorts by comment likes,
+    and returns up to 'top_comments' normalized comments.
+    """
+    try:
+        # Step 1: Discover content and fetch comments automatically via orchestrator
+        res = await social_service.search_social_topic(
+            query=query,
+            platform=platform,
+            top_n=top_content,
+            comments_per_content=min(200, max(50, top_comments // top_content + 10)),
+            auto_store=False
+        )
+        
+        if res.get("status") == "error":
+            return res
+            
+        # Step 2: Collect, normalize, and deduplicate comments from all posts
+        all_comments = []
+        seen_comments = set()
+        
+        for post_res in res.get("results", []):
+            post_url = post_res.get("content_url")
+            for comment in post_res.get("comments", []):
+                text = (comment.get("text") or "").strip()
+                if not text:
+                    continue
+                author_info = comment.get("author", {})
+                username = author_info.get("username") if author_info else "anonymous"
+                likes = comment.get("likes") or 0
+                
+                # Deduplication by username + text
+                dedup_key = f"{username}:{text}"
+                if dedup_key not in seen_comments:
+                    seen_comments.add(dedup_key)
+                    all_comments.append({
+                        "username": username,
+                        "comment": text,
+                        "likes": likes,
+                        "post_url": post_url
+                    })
+                    
+        # Step 3: Sort by likes DESC across ALL posts
+        all_comments.sort(key=lambda x: x["likes"], reverse=True)
+        
+        # Step 4: Truncate to top_comments
+        final_comments = all_comments[:top_comments]
+        
+        return {
+            "status": "success",
+            "query": query,
+            "platform": platform,
+            "trending_posts_analyzed": len(res.get("results", [])),
+            "total_comments_extracted": len(all_comments),
+            "returned_comments": len(final_comments),
+            "comments": final_comments
+        }
+        
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).error("Error in search_social_trending_comments", exc_info=True)
+        return {
+            "status": "error",
+            "message": f"Social discovery failed: {str(exc)}"
+        }
 
 
 # ==============================================================================

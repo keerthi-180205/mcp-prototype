@@ -31,7 +31,10 @@ def parse_iso_datetime(dt_str: Optional[str]) -> Optional[datetime.datetime]:
 
     # Handle formats like 2026-03-15T12:00:00.000
     try:
-        return datetime.datetime.fromisoformat(cleaned)
+        dt = datetime.datetime.fromisoformat(cleaned)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        return dt
     except Exception:
         pass
 

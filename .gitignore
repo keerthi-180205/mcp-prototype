@@ -13,6 +13,7 @@ __pycache__/
 htmlcov/
 *.egg-info/
 dist/
+**/dist/
 build/
 
 # Sensitive environment credentials & secrets
@@ -43,9 +44,21 @@ data/*.sqlite*
 *.log
 logs/
 
-# Node & frontend inspector
+# Node & frontend dependencies and builds
 node_modules/
+**/node_modules/
 .npm/
+.vite/
+**/.vite/
+dist-ssr/
+*.local
+
+# Temporary scratch & root test scripts
+/test_*.py
+scripts/test_browser_*.py
+/scratch/
+/tmp/
+/temp/
 
 # Operating system & IDE files
 .DS_Store
@@ -54,3 +67,4 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+*~

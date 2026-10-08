@@ -96,15 +96,36 @@ async def run_live_demo() -> None:
                 commenter = comm.user.username if comm.user and comm.user.username else "Anonymous"
                 print(f"  [{c_idx}] @{commenter}: {comm.text[:60] if comm.text else ''} (Likes: {comm.like_count})")
 
-        # 3. End-to-end Topic Research (low limit: max_posts=1, max_comments_per_post=2)
-        print(f"\nStep 3: End-to-end Topic Research for '{query}' (max_posts=1, max_comments_per_post=2)...")
+        # 3. End-to-end Topic Research (filtering for REELS and sorting by top comment likes)
+        print(f"\nStep 3: Finding Top Trending Reels for '{query}' based on comment likes...")
         research = await service.research_topic(
             query=query,
-            max_posts=1,
-            max_comments_per_post=2,
+            max_posts=3, # fetch a bit more to find reels
+            max_comments_per_post=5,
         )
-        print(f"Completed topic research for '{research.query}'. Results JSON:")
-        print(json.dumps(research.model_dump(), indent=2))
+        
+        reels_data = []
+        for res in research.results:
+            max_likes = 0
+            top_comment_text = "No comments"
+            if res.comments:
+                top_c = max(res.comments, key=lambda c: c.like_count or 0)
+                max_likes = top_c.like_count or 0
+                top_comment_text = top_c.text or ""
+            
+            reels_data.append((max_likes, res.content, top_comment_text))
+            
+        reels_data.sort(key=lambda x: x[0], reverse=True)
+        
+        print(f"\nFound {len(reels_data)} posts/reels. Top trending based on comment likes:")
+        if not reels_data:
+            print("  No posts/reels found or scraped.")
+        for idx, (likes, content, comment_text) in enumerate(reels_data, start=1):
+            caption_short = (content.caption[:60].replace('\n', ' ') + "...") if content.caption else "None"
+            print(f"\n  [{idx}] URL: {content.url}")
+            print(f"      Caption: {caption_short}")
+            print(f"      Top Comment Likes: {likes}")
+            print(f"      Top Comment: {comment_text}")
 
     except Exception as exc:
         print(f"[ERROR] Live call failed: {exc}", file=sys.stderr)

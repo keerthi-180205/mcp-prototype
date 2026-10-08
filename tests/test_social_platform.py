@@ -615,8 +615,100 @@ async def test_youtube_social_provider_mocked():
         comments = await provider.get_comments("yt_123", limit=5)
         assert len(comments) == 1
         assert comments[0].interaction_id == "c_yt_1"
-        assert comments[0].author.username == "@fitness_fan"
+        assert comments[0].author.username == "fitness_fan"
         assert comments[0].likes == 15
+
+
+@pytest.mark.asyncio
+async def test_youtube_social_provider_get_content_and_profile():
+    """Verify get_content and get_profile on YouTubeSocialProvider."""
+    import json
+    from unittest.mock import AsyncMock, patch
+    from server.providers.social.youtube import YouTubeSocialProvider
+
+    provider = YouTubeSocialProvider()
+    fake_video_json = json.dumps({
+        "id": "yt_999",
+        "title": "Deep Dive into Multi-Agent AI",
+        "description": "Explaining autonomous agents in Python",
+        "uploader": "AI Researcher",
+        "uploader_id": "@airesearcher",
+        "channel_id": "c_ai_1",
+        "channel_url": "https://youtube.com/@airesearcher",
+        "upload_date": "20260915",
+        "like_count": 4200,
+        "view_count": 89000,
+        "comment_count": 310,
+        "tags": ["ai", "agents", "python"],
+    })
+
+    fake_channel_json = json.dumps({
+        "channel": "AI Researcher Official",
+        "channel_id": "c_ai_1",
+        "uploader": "AI Researcher Official",
+    })
+
+    with patch.object(provider, "_run_yt_dlp", new=AsyncMock(side_effect=[fake_video_json, fake_channel_json])):
+        content = await provider.get_content("yt_999")
+        assert content is not None
+        assert content.platform == "youtube"
+        assert content.content_id == "yt_999"
+        assert content.content.title == "Deep Dive into Multi-Agent AI"
+        assert content.engagement.likes == 4200
+        assert content.author.user_id == "c_ai_1"
+
+        profile = await provider.get_profile("@airesearcher")
+        assert profile is not None
+        assert profile.username == "airesearcher"
+        assert profile.display_name == "AI Researcher Official"
+        assert profile.user_id == "c_ai_1"
+
+
+@pytest.mark.asyncio
+async def test_search_social_trending_comments_youtube():
+    """Verify search_social_trending_comments MCP tool with youtube platform."""
+    from unittest.mock import AsyncMock, patch
+    from server.server import search_social_trending_comments
+
+    mock_topic_response = {
+        "status": "success",
+        "query": "coding",
+        "platform": "youtube",
+        "results": [
+            {
+                "content_url": "https://youtube.com/watch?v=code_1",
+                "caption": "Python Tutorial",
+                "comments": [
+                    {
+                        "author": {"username": "coder_pro"},
+                        "text": "Best tutorial ever!",
+                        "likes": 50,
+                    },
+                    {
+                        "author": {"username": "beginner_dev"},
+                        "text": "Super helpful thank you",
+                        "likes": 12,
+                    },
+                ],
+            }
+        ],
+    }
+
+    with patch("server.server.social_service.search_social_topic", new=AsyncMock(return_value=mock_topic_response)):
+        res = await search_social_trending_comments(
+            query="coding",
+            platform="youtube",
+            top_content=1,
+            top_comments=5,
+        )
+        assert res["status"] == "success"
+        assert res["platform"] == "youtube"
+        assert res["trending_posts_analyzed"] == 1
+        assert res["total_comments_extracted"] == 2
+        assert len(res["comments"]) == 2
+        assert res["comments"][0]["username"] == "coder_pro"
+        assert res["comments"][0]["likes"] == 50
+
 
 
 

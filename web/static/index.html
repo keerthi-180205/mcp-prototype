@@ -30,46 +30,46 @@
             <div class="sidebar-section">
                 <label class="section-label">Example Use Cases</label>
                 <div class="presets-list">
-                    <button class="preset-btn" data-query="Find Instagram reels about ebook selling, extract commenter IDs and what they commented">
+                    <button class="preset-btn" data-query="Search YouTube for AI agents and workflow automation videos, extract top commenter usernames and what they said" data-platform="youtube">
+                        <span class="icon">▶️</span>
+                        <div>
+                            <strong>YouTube AI Tutorials</strong>
+                            <small>Tech reviews & developer comments</small>
+                        </div>
+                    </button>
+                    <button class="preset-btn" data-query="Find YouTube videos on cricket highlights and match analysis, collect commenter user IDs and their actual comments" data-platform="youtube">
+                        <span class="icon">🏏</span>
+                        <div>
+                            <strong>YouTube Cricket Analysis</strong>
+                            <small>Fan reactions & top debates</small>
+                        </div>
+                    </button>
+                    <button class="preset-btn" data-query="Find Instagram reels about ebook selling, extract commenter IDs and what they commented" data-platform="instagram">
                         <span class="icon">📖</span>
                         <div>
                             <strong>Ebook Selling</strong>
                             <small>Find leads & buyer questions</small>
                         </div>
                     </button>
-                    <button class="preset-btn" data-query="Search Instagram reels for video editors and video editing services, collect who commented and their exact comments">
+                    <button class="preset-btn" data-query="Search Instagram reels for video editors and video editing services, collect who commented and their exact comments" data-platform="instagram">
                         <span class="icon">🎬</span>
                         <div>
                             <strong>Video Editing</strong>
                             <small>Creator & client outreach</small>
                         </div>
                     </button>
-                    <button class="preset-btn" data-query="Find Instagram reels about AI tools and workflow automation, collect commenter user IDs and their actual comments">
+                    <button class="preset-btn" data-query="Find social posts about AI tools and workflow automation, collect commenter user IDs and their actual comments" data-platform="reddit">
                         <span class="icon">🤖</span>
                         <div>
-                            <strong>AI Tools & Software</strong>
-                            <small>Tech enthusiasts & adopters</small>
+                            <strong>Reddit AI Tools</strong>
+                            <small>Community discussions & adopters</small>
                         </div>
                     </button>
-                    <button class="preset-btn" data-query="Search Instagram reels for fitness, workout routines, and diet tips, collect commenter handles and comments">
-                        <span class="icon">🏋️</span>
-                        <div>
-                            <strong>Fitness & Health</strong>
-                            <small>Gym & nutrition discussions</small>
-                        </div>
-                    </button>
-                    <button class="preset-btn" data-query="Find Instagram reels discussing mental health, stress, and anxiety, and extract commenter IDs and their exact comments">
+                    <button class="preset-btn" data-query="Search social posts discussing mental health, stress, and anxiety, and extract commenter IDs and their exact comments" data-platform="reddit">
                         <span class="icon">🧠</span>
                         <div>
                             <strong>Mental Health</strong>
                             <small>Stress & anxiety discussions</small>
-                        </div>
-                    </button>
-                    <button class="preset-btn" data-query="Search Instagram reels about freelancing and client acquisition, collect commenter usernames and what they said">
-                        <span class="icon">💼</span>
-                        <div>
-                            <strong>Freelancing & Agency</strong>
-                            <small>Client outreach & problems</small>
                         </div>
                     </button>
                 </div>
@@ -79,16 +79,16 @@
                 <label class="section-label">Pipeline Controls</label>
                 <div class="control-box">
                     <div class="control-row">
-                        <span>Platform</span>
-                        <span class="tag-pill instagram">Instagram Reels</span>
+                        <span>Reach Mode</span>
+                        <span class="tag-pill db" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">Universal Reach</span>
                     </div>
                     <div class="control-row">
-                        <span>Target Reels</span>
-                        <input type="number" id="maxReelsInput" min="1" max="10" value="2" class="num-input">
+                        <span>Target Posts</span>
+                        <input type="number" id="maxReelsInput" min="1" max="20" value="5" class="num-input">
                     </div>
                     <div class="control-row">
-                        <span>Comments/Reel</span>
-                        <input type="number" id="maxCommentsInput" min="1" max="30" value="10" class="num-input">
+                        <span>Comments/Post</span>
+                        <input type="number" id="maxCommentsInput" min="1" max="100" value="25" class="num-input">
                     </div>
                     <div class="control-row">
                         <span>Storage</span>
@@ -110,7 +110,7 @@
             <header class="chat-header">
                 <div>
                     <h1>Universal Social Intelligence & Outreach Chatbot</h1>
-                    <p>Enter <strong>any topic</strong> &bull; Discovers public reels &bull; Collects user Instagram IDs &bull; Extracts exact comments</p>
+                    <p>Enter <strong>any topic</strong> &bull; Discovers YouTube videos & social posts &bull; Collects user IDs &bull; Extracts exact comments</p>
                 </div>
                 <div class="header-actions">
                     <button id="exportCsvBtn" class="btn-secondary" style="display: none;">
@@ -127,18 +127,18 @@
                     <div class="message-content">
                         <div class="message-bubble">
                             <h3>👋 Welcome! What topic do you want to explore?</h3>
-                            <p>This platform is <strong>completely generic and topic-agnostic</strong>. You can ask for public Instagram data on <strong>any subject</strong>. The system searches matching reels, goes into the comment section, and returns the <strong>commenter Instagram IDs</strong> along with <strong>what they actually commented</strong>:</p>
+                            <p>This platform is <strong>completely generic and multi-platform</strong>. You can ask for public data on <strong>any subject across YouTube, Reddit, Instagram, etc.</strong> The system searches matching videos or posts, dives into the comment section, and returns the <strong>commenter IDs</strong> along with <strong>what they actually commented</strong> ranked by likes:</p>
                             <div class="topic-chips">
+                                <span class="chip">▶️ YouTube Videos</span>
+                                <span class="chip">🤖 AI Tools</span>
+                                <span class="chip">🏏 Cricket</span>
                                 <span class="chip">📖 Ebook Selling</span>
                                 <span class="chip">🎬 Video Editors</span>
-                                <span class="chip">🤖 AI Tools</span>
                                 <span class="chip">🏋️ Fitness</span>
                                 <span class="chip">🧠 Mental Health</span>
-                                <span class="chip">💼 Freelancing</span>
-                                <span class="chip">📈 Marketing</span>
                                 <span class="chip">✨ Any Custom Topic</span>
                             </div>
-                            <p class="hint-text">Type your query below (e.g. <em>"Find reels on ebook selling and show who commented"</em>) or click any preset in the sidebar.</p>
+                            <p class="hint-text">Type your query below (e.g. <em>"Find YouTube videos on AI agents and show who commented"</em>) or click any preset in the sidebar.</p>
                         </div>
                     </div>
                 </div>

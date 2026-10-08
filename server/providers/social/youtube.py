@@ -94,7 +94,7 @@ class YouTubeSocialProvider(SocialDataProvider):
                 entries = data.get("entries", [data])
 
         records: List[NormalizedSocialRecord] = []
-        now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
         if not entries:
             return []
@@ -169,24 +169,36 @@ class YouTubeSocialProvider(SocialDataProvider):
         video_id = self._extract_video_id(content_url_or_id)
         video_url = f"https://www.youtube.com/watch?v={video_id}"
 
-        # Get metadata
-        info_data = await self.adapter.execute_command("youtube.info", video_url, timeout=20.0)
-        now_iso = datetime.datetime.utcnow().isoformat() + "Z"
+        # Fetch metadata using yt-dlp directly or adapter fallback
+        info_data = None
+        raw_output = await self._run_yt_dlp(["--dump-json", "--no-playlist", video_url], timeout=25.0)
+        if raw_output:
+            try:
+                info_data = json.loads(raw_output)
+            except Exception:
+                pass
+
+        if not info_data:
+            info_data = await self.adapter.execute_command("youtube.info", video_url, timeout=20.0)
+
+        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
         title = "YouTube Video"
         text = ""
         author = SocialAuthor()
         published_at = None
         engagement = SocialEngagement()
+        tags: List[str] = []
 
         if info_data and isinstance(info_data, dict):
             title = info_data.get("title", title)
             text = info_data.get("description", "")
+            tags = (info_data.get("tags") or info_data.get("categories") or [])[:10]
             author = SocialAuthor(
-                username=info_data.get("uploader") or info_data.get("channel"),
+                username=info_data.get("uploader_id") or info_data.get("uploader") or info_data.get("channel"),
                 user_id=info_data.get("channel_id"),
-                display_name=info_data.get("uploader"),
-                profile_url=info_data.get("channel_url"),
+                display_name=info_data.get("uploader") or info_data.get("channel"),
+                profile_url=info_data.get("channel_url") or info_data.get("uploader_url"),
             )
             upload_date = info_data.get("upload_date")
             if upload_date and len(upload_date) == 8:
@@ -219,8 +231,9 @@ class YouTubeSocialProvider(SocialDataProvider):
             author=author,
             content=SocialContent(
                 title=title,
-                text=text,
+                text=text[:1000] if text else title,
                 caption=title,
+                tags=tags,
             ),
             engagement=engagement,
             interactions=[],
@@ -239,7 +252,7 @@ class YouTubeSocialProvider(SocialDataProvider):
         """Fetch public comments for a YouTube video via yt-dlp."""
         video_id = self._extract_video_id(content_url_or_id)
         video_url = f"https://www.youtube.com/watch?v={video_id}"
-        safe_limit = max(1, min(limit, 50))
+        safe_limit = max(1, min(limit, 100))
 
         raw_output = await self._run_yt_dlp([
             "--write-comments",
@@ -259,7 +272,8 @@ class YouTubeSocialProvider(SocialDataProvider):
             comments = data.get("comments", [])
             for c in comments[:safe_limit]:
                 cid = c.get("id") or str(c.get("timestamp") or "")
-                c_author = c.get("author") or ""
+                c_author = (c.get("author") or "").strip()
+                clean_user = c_author.lstrip("@") or "anonymous"
                 c_author_id = c.get("author_id")
                 c_author_url = c.get("author_url")
                 c_text = c.get("text") or ""
@@ -267,7 +281,7 @@ class YouTubeSocialProvider(SocialDataProvider):
                 ts = c.get("timestamp")
                 c_time = None
                 if ts:
-                    c_time = datetime.datetime.utcfromtimestamp(ts).isoformat() + "Z"
+                    c_time = datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).isoformat()
 
                 interactions.append(
                     SocialInteraction(
@@ -275,9 +289,9 @@ class YouTubeSocialProvider(SocialDataProvider):
                         type="comment",
                         text=c_text,
                         author=SocialAuthor(
-                            username=c_author,
+                            username=clean_user,
                             user_id=c_author_id,
-                            display_name=c_author,
+                            display_name=c_author or clean_user,
                             profile_url=c_author_url,
                             is_verified=c.get("author_is_verified", False),
                         ),
@@ -295,7 +309,28 @@ class YouTubeSocialProvider(SocialDataProvider):
     ) -> Optional[SocialAuthor]:
         """Return public YouTube channel info."""
         clean_handle = identifier.replace("@", "").strip()
+        channel_url = f"https://www.youtube.com/@{clean_handle}"
+        display_name = clean_handle
+        channel_id = None
+
+        try:
+            raw_channel = await self._run_yt_dlp(
+                ["--dump-json", "--flat-playlist", "--playlist-items", "1", channel_url],
+                timeout=10.0,
+            )
+            if raw_channel:
+                for line in raw_channel.split("\n"):
+                    if line.strip():
+                        item = json.loads(line)
+                        display_name = item.get("channel") or item.get("uploader") or clean_handle
+                        channel_id = item.get("channel_id")
+                        break
+        except Exception:
+            pass
+
         return SocialAuthor(
             username=clean_handle,
-            profile_url=f"https://www.youtube.com/@{clean_handle}",
+            user_id=channel_id,
+            display_name=display_name,
+            profile_url=channel_url,
         )

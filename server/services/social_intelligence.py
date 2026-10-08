@@ -157,8 +157,8 @@ class SocialIntelligenceService:
 
         clean_query = query.strip()
         platform_norm = (platform or "instagram").strip().lower()
-        safe_top_n = max(1, min(top_n, 50))
-        safe_comments = max(1, min(comments_per_content, 50))
+        safe_top_n = max(1, min(top_n, 200))
+        safe_comments = max(1, min(comments_per_content, 1500))
 
         # STEP 2: Provider lookup
         provider = self.registry.get_provider(platform_norm)

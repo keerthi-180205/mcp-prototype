@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const messagesContainer = document.getElementById('messagesContainer');
     const maxReelsInput = document.getElementById('maxReelsInput');
     const maxCommentsInput = document.getElementById('maxCommentsInput');
+    const platformSelect = document.getElementById('platformSelect');
     const exportCsvBtn = document.getElementById('exportCsvBtn');
 
     let allExtractedRecords = [];
@@ -26,6 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.preset-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const query = btn.getAttribute('data-query');
+            const targetPlatform = btn.getAttribute('data-platform');
+            if (targetPlatform && platformSelect) {
+                platformSelect.value = targetPlatform;
+            }
             queryInput.value = query;
             queryInput.dispatchEvent(new Event('input'));
             chatForm.dispatchEvent(new Event('submit'));
@@ -44,8 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const query = queryInput.value.trim();
         if (!query) return;
 
-        const maxReels = parseInt(maxReelsInput.value) || 2;
-        const maxComments = parseInt(maxCommentsInput.value) || 10;
+        const maxReels = parseInt(maxReelsInput ? maxReelsInput.value : 5) || 5;
+        const maxComments = parseInt(maxCommentsInput ? maxCommentsInput.value : 25) || 25;
 
         // Add user message
         addUserMessage(query);
@@ -77,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     exportCsvBtn.style.display = 'flex';
                 }
             } else {
-                addErrorMessage(data.message || 'An error occurred while fetching Instagram intelligence.');
+                addErrorMessage(data.message || `An error occurred while fetching social intelligence.`);
             }
         } catch (err) {
             removeMessage(thinkingId);
@@ -115,24 +120,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="pipeline-card">
                         <h4>
                             <span class="spinner"></span>
-                            Agent Reach & Apify Pipeline Executing...
+                            Universal Social Intelligence Pipeline Executing...
                         </h4>
                         <div class="pipeline-steps">
                             <div class="step-item active">
                                 <span class="step-bullet"></span>
-                                <span>Discovering relevant public Instagram Reels for target topic...</span>
+                                <span>Scanning reachable platforms via Agent Reach (YouTube, Reddit, X / Twitter, Instagram)...</span>
                             </div>
                             <div class="step-item active">
                                 <span class="step-bullet"></span>
-                                <span>Navigating into comment sections of discovered reels...</span>
+                                <span>Discovering top trending posts & videos...</span>
                             </div>
                             <div class="step-item active">
                                 <span class="step-bullet"></span>
-                                <span>Extracting commenter user handles & exact comment texts...</span>
+                                <span>Extracting commenter user IDs & exact public comments...</span>
                             </div>
                             <div class="step-item active">
                                 <span class="step-bullet"></span>
-                                <span>Filtering relevant discussions & storing in SQLite with deduplication...</span>
+                                <span>Ranking comments by engagement and deduplicating...</span>
                             </div>
                         </div>
                     </div>
@@ -144,82 +149,93 @@ document.addEventListener('DOMContentLoaded', () => {
         return id;
     }
 
+    function getPlatformStyle(platform) {
+        const p = (platform || '').toLowerCase();
+        if (p.includes('youtube')) {
+            return 'background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);';
+        } else if (p.includes('reddit')) {
+            return 'background: rgba(249, 115, 22, 0.15); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.3);';
+        } else if (p.includes('twitter') || p.includes(' x')) {
+            return 'background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);';
+        } else if (p.includes('instagram')) {
+            return 'background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3);';
+        }
+        return 'background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);';
+    }
+
     function addAssistantResponse(data) {
         const msgDiv = document.createElement('div');
         msgDiv.className = 'message assistant-message';
 
         const comments = data.comments || [];
-        const reelsCount = data.reels_analyzed || 0;
         const totalComments = comments.length;
+        const reachedStr = data.platform || (data.platforms_reached ? data.platforms_reached.join(', ') : 'Universal Reach');
 
-        let cardsHtml = '';
+        let tableBodyHtml = '';
         if (comments.length === 0) {
-            cardsHtml = `
-                <div style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; color: #94a3b8; font-size: 0.88rem;">
-                    No public comments specifically matching mental health discussions were returned for this query. Try a different topic or verify your Apify token.
-                </div>
+            tableBodyHtml = `
+                <tr>
+                    <td colspan="4" style="padding: 24px; text-align: center; color: #94a3b8;">
+                        No public comments found across reachable platforms. Try a broader topic term.
+                    </td>
+                </tr>
             `;
         } else {
-            cardsHtml = comments.map(c => {
-                const badgeClass = getBadgeClass(c.category);
-                const profileUrl = c.user_handle 
-                    ? `https://www.instagram.com/${c.user_handle}/` 
-                    : (c.profile_url || '#');
+            tableBodyHtml = comments.map(c => {
+                const userId = c.user_id || c.username || 'anonymous';
+                const commentText = c.comment || c.comment_text || '';
+                const platformName = c.platform || 'Social';
+                const sourceUrl = c.link || c.post_url || '';
+                const badgeStyle = getPlatformStyle(platformName);
 
                 return `
-                    <div class="comment-card">
-                        <div class="comment-header">
-                            <div class="insta-user">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f472b6" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-                                <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" class="insta-handle">
-                                    @${escapeHtml(c.user_handle || 'anonymous_user')}
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.06);">
+                        <td style="padding: 10px 14px; font-weight: 600; color: #93c5fd; white-space: nowrap; vertical-align: top;">
+                            ${escapeHtml(userId)}
+                            ${c.likes > 0 ? `<div style="font-size: 0.72rem; color: #64748b; font-weight: normal; margin-top: 2px;">❤️ ${c.likes.toLocaleString()} likes</div>` : ''}
+                        </td>
+                        <td style="padding: 10px 14px; line-height: 1.5; color: #e2e8f0; vertical-align: top;">
+                            ${escapeHtml(commentText)}
+                        </td>
+                        <td style="padding: 10px 14px; text-align: center; vertical-align: top; white-space: nowrap;">
+                            <span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; ${badgeStyle}">
+                                ${escapeHtml(platformName)}
+                            </span>
+                        </td>
+                        <td style="padding: 10px 14px; text-align: center; vertical-align: top; white-space: nowrap;">
+                            ${sourceUrl ? `
+                                <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; gap: 4px; color: #60a5fa; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; text-decoration: none;">
+                                    View Source ↗
                                 </a>
-                                ${c.is_verified ? '<span class="verified-badge" title="Verified">✓</span>' : ''}
-                                ${c.user_id ? `<span style="font-size: 0.68rem; color: #64748b;">(ID: ${c.user_id})</span>` : ''}
-                            </div>
-                            <span class="topic-badge ${badgeClass}">${escapeHtml(c.category || 'Mental Health')}</span>
-                        </div>
-
-                        <div class="comment-body">
-                            "${escapeHtml(c.comment_text)}"
-                        </div>
-
-                        <div class="comment-footer">
-                            <span>❤️ ${c.likes || 0} likes &bull; ${c.created_at || 'Recent'}</span>
-                            <a href="${c.post_url}" target="_blank" rel="noopener noreferrer" class="source-link">
-                                Source Reel ↗
-                            </a>
-                        </div>
-                    </div>
+                            ` : '<span style="color: #64748b; font-size: 0.75rem;">N/A</span>'}
+                        </td>
+                    </tr>
                 `;
             }).join('');
         }
 
         msgDiv.innerHTML = `
             <div class="avatar">AI</div>
-            <div class="message-content">
-                <div class="message-bubble">
+            <div class="message-content" style="max-width: 100%;">
+                <div class="message-bubble" style="max-width: 100%;">
                     <p style="font-size: 0.95rem; margin-bottom: 12px;">
-                        ${escapeHtml(data.summary_message || 'Here are the acquired Instagram mental health comments:')}
+                        ${escapeHtml(data.chatbot_message || `Collected ${totalComments} public comments across ${reachedStr}:`)}
                     </p>
 
-                    <div class="results-summary">
-                        <div class="stat-chip">
-                            <span>Reels Analyzed</span>
-                            <strong>${reelsCount}</strong>
-                        </div>
-                        <div class="stat-chip">
-                            <span>Commenters Extracted</span>
-                            <strong>${totalComments}</strong>
-                        </div>
-                        <div class="stat-chip">
-                            <span>Target Subject</span>
-                            <strong style="color: #f472b6;">${escapeHtml(data.topic || 'Custom Subject')}</strong>
-                        </div>
-                    </div>
-
-                    <div class="comments-stream">
-                        ${cardsHtml}
+                    <div style="overflow-x: auto; background: rgba(15, 23, 42, 0.7); border-radius: 10px; border: 1px solid var(--border);">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; color: #cbd5e1;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.3); text-align: left;">
+                                    <th style="padding: 10px 14px; width: 180px;">User ID</th>
+                                    <th style="padding: 10px 14px;">Comment</th>
+                                    <th style="padding: 10px 14px; text-align: center; width: 130px;">Platform Name</th>
+                                    <th style="padding: 10px 14px; text-align: center; width: 140px;">Source Link</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tableBodyHtml}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -281,11 +297,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function exportToCsv(records) {
-        const headers = ['Instagram Username', 'User ID', 'Comment Text', 'Category', 'Likes', 'Reel URL', 'Timestamp'];
+        const headers = ['Username', 'User ID', 'Comment Text', 'Category', 'Likes', 'Post URL', 'Timestamp'];
         const rows = records.map(r => [
-            `"${(r.user_handle || '').replace(/"/g, '""')}"`,
+            `"${(r.user_handle || r.username || '').replace(/"/g, '""')}"`,
             `"${(r.user_id || '').replace(/"/g, '""')}"`,
-            `"${(r.comment_text || '').replace(/"/g, '""')}"`,
+            `"${(r.comment_text || r.comment || '').replace(/"/g, '""')}"`,
             `"${(r.category || '').replace(/"/g, '""')}"`,
             r.likes || 0,
             `"${(r.post_url || '').replace(/"/g, '""')}"`,
@@ -296,7 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement('a');
         link.setAttribute('href', encodedUri);
-        link.setAttribute('download', `instagram_mental_health_comments_${Date.now()}.csv`);
+        link.setAttribute('download', `social_comments_${Date.now()}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
