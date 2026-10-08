@@ -280,6 +280,45 @@ Run manual live verification scripts (optional, performs real API calls):
 
 ---
 
+## Comment Collection (Instagram, YouTube, Reddit, X)
+
+Type a topic ("Asian Games 2026") and the server finds the most relevant posts/videos/threads on each
+platform, opens their comment sections and collects the **commenters** (not the creators): username,
+user id and comment text. It keeps moving to the next-best post until `target_comments` per platform
+(default 500) is reached or a limit (max posts, max time, Apify budget) is hit.
+
+| Platform | Backend | Credentials |
+|---|---|---|
+| Instagram | Apify (`instagram-scraper` + `instagram-comment-scraper`) | `APIFY_API_TOKEN` |
+| YouTube | `yt-dlp` (no login) | - |
+| Reddit | `rdt-cli` | `REDDIT_SESSION` (the `reddit_session` cookie) |
+| X / Twitter | `twitter-cli` | `TWITTER_AUTH_TOKEN`, `TWITTER_CT0` |
+
+Collection takes minutes, so it is an async job:
+
+1. `start_comment_collection(topic, platforms=None, target_comments=500, max_posts_per_platform=30, max_minutes=10)` -> `job_id`
+2. `get_collection_status(job_id)` -> per-platform progress (`discovering` / `harvesting` / `done` / `failed` / `skipped`), posts processed, comments collected, stop reason
+3. `get_collection_results(job_id, page=1, page_size=25, platform=None)` -> summary (counts per platform, top comments, platforms below target) + one page of rows
+4. `export_collection_results(job_id, format="csv"|"json")` -> writes `data/exports/<job_id>.csv|json` with **all** rows
+
+Row format: `platform, username, user_id, comment, likes, created_at, post_url`. Rows are stored in the
+SQLite database (`collected_comments` / `collection_jobs`) and deduplicated on (platform, username, comment).
+
+Pipeline (`server/collection/`): query planner (rules, optionally Gemini) -> discovery -> ranking
+(comment count x relevance x recency) -> adaptive harvesting -> cleaning (drop empty comments, the
+post creator's own comments, duplicates) -> SQLite -> CSV/JSON.
+
+**Instagram cost protection.** Apify bills per result (about $0.0027 per discovered post and $0.0026 per
+comment, no per-run fee). Every query is hard-capped by `APIFY_MAX_COMMENTS_PER_QUERY` and
+`APIFY_MAX_COST_PER_QUERY_USD` (enforced client-side and via Apify's `maxItems` / `maxTotalChargeUsd`),
+at most 40% of the cost cap is spent on discovery, posts without comments are never opened, and many post
+URLs are sent in a single Actor run. These caps are environment-only: the chatbot cannot raise them.
+Instagram hashtag feeds only expose the newest posts, which usually have few comments, so Instagram will
+often finish below the target (the status reports `no_more_candidates` or `budget_cap_reached`).
+
+Live smoke tests: `python scripts/collect_live.py --platform youtube --target 500` (one platform) and
+`python scripts/collect_job_live.py --platforms youtube reddit x instagram` (full job via the tool functions).
+
 ## Instagram + Apify Demo
 
 > **Notice**: This is an initial **proof-of-concept** for public-data acquisition. It strictly queries public posts/reels and public comments returned by Apify Actors without bypassing access controls, accessing private accounts or DMs, or using browser session tokens. Commenter data is treated purely as public interaction metadata; no identity enrichment or sensitive classification is performed.

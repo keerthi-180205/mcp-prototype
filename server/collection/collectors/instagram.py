@@ -15,6 +15,7 @@ from server.providers.apify.instagram import ApifyInstagramProvider
 logger = logging.getLogger("mcp_server.collection.instagram")
 
 MAX_TAGS = 3
+DISCOVERY_BUDGET_SHARE = 0.4
 
 
 def _post_key(url: Optional[str]) -> str:
@@ -28,9 +29,10 @@ class InstagramCollector(PlatformCollector):
     def __init__(self, provider: Optional[ApifyInstagramProvider] = None, token: Optional[str] = None):
         self._provider = provider
         self._token = token if token is not None else os.getenv("APIFY_API_TOKEN")
-        # Conservative cost model (observed: large fixed cost per run + small cost per item).
-        self.cost_per_run = float(os.getenv("APIFY_COST_PER_RUN_USD", "0.07"))
-        self.cost_per_item = float(os.getenv("APIFY_COST_PER_ITEM_USD", "0.0025"))
+        # Cost model measured from real Apify run billing: pay-per-result, no per-run fee.
+        self.price_result = float(os.getenv("APIFY_COST_PER_RESULT_USD", "0.0027"))  # instagram-scraper
+        self.price_comment = float(os.getenv("APIFY_COST_PER_COMMENT_USD", "0.0026"))  # comment scraper
+        self.cost_per_run = float(os.getenv("APIFY_COST_PER_RUN_USD", "0"))
         self.max_items = 1500
         self.max_cost = 0.5
         self.discovery_posts = 120
@@ -62,13 +64,18 @@ class InstagramCollector(PlatformCollector):
     def _remaining_items(self) -> int:
         return self.max_items - self.items_used
 
-    def budget_exhausted(self) -> bool:
-        return self._remaining_items() <= 0 or self._remaining_cost() < self.cost_per_run + self.cost_per_item
+    def _affordable(self, price: float) -> int:
+        """How many items at `price` each still fit under both the item cap and the cost cap."""
+        by_cost = int((self._remaining_cost() - self.cost_per_run) / price + 1e-9) if price > 0 else self._remaining_items()
+        return max(0, min(self._remaining_items(), by_cost))
 
-    def _account(self, n_items: int) -> None:
+    def budget_exhausted(self) -> bool:
+        return self._affordable(self.price_comment) < 1
+
+    def _account(self, n_items: int, price: float) -> None:
         self.runs += 1
         self.items_used += n_items
-        self.spent_estimate += self.cost_per_run + n_items * self.cost_per_item
+        self.spent_estimate += self.cost_per_run + n_items * price
 
     def usage(self) -> Dict[str, Any]:
         return {
@@ -86,20 +93,24 @@ class InstagramCollector(PlatformCollector):
     # ---- discovery -----------------------------------------------------------------
     async def discover(self, plan: QueryPlan, limit: int) -> List[PostCandidate]:
         tags = plan.hashtags[:MAX_TAGS] or ["".join(plan.topic.lower().split())]
-        total = max(len(tags), min(self.discovery_posts, self.max_items))
-        per_tag = -(-total // len(tags))
-        if self.budget_exhausted():
+        # Finding posts is billed per post too, and most recent posts have no comments yet:
+        # never spend more than DISCOVERY_BUDGET_SHARE of the cost cap on discovery.
+        by_budget = int(self.max_cost * DISCOVERY_BUDGET_SHARE / self.price_result) if self.price_result > 0 else self.discovery_posts
+        total = min(self.discovery_posts, self.max_items, by_budget, self._affordable(self.price_result))
+        if total < 1:
             return []
+        tags = tags[: max(1, total)]
+        per_tag = -(-total // len(tags))
         try:
             items = await self.provider.search_hashtags(
                 tags,
                 per_tag,
-                max_items=min(total, self._remaining_items()),
-                max_total_charge_usd=max(0.01, self._remaining_cost()),
+                max_items=total,
+                max_total_charge_usd=max(0.01, min(self._remaining_cost(), total * self.price_result + 0.01)),
             )
         except (ApifyAuthenticationError, ApifyRateLimitError) as exc:
             raise self._fatal(exc) from exc
-        self._account(len(items))
+        self._account(len(items), self.price_result)
 
         out: Dict[str, PostCandidate] = {}
         for it in items:
@@ -138,17 +149,19 @@ class InstagramCollector(PlatformCollector):
         if not posts or self.budget_exhausted():
             return {}
         wanted = {p.url: per_post_limit.get(p.url, 50) for p in posts}
-        max_items = min(sum(wanted.values()), self._remaining_items())
+        max_items = min(sum(wanted.values()), self._affordable(self.price_comment))
+        if max_items < 1:
+            return {}
         try:
             items = await self.provider.get_comments_batch(
                 [p.url for p in posts],
                 max(wanted.values()),
                 max_items=max_items,
-                max_total_charge_usd=max(0.01, self._remaining_cost()),
+                max_total_charge_usd=max(0.01, min(self._remaining_cost(), max_items * self.price_comment + 0.01)),
             )
         except (ApifyAuthenticationError, ApifyRateLimitError) as exc:
             raise self._fatal(exc) from exc
-        self._account(len(items))
+        self._account(len(items), self.price_comment)
 
         by_key = {_post_key(p.url): p.url for p in posts}
         results: Dict[str, List[CommentRow]] = {p.url: [] for p in posts}

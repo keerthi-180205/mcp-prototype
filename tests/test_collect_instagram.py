@@ -108,18 +108,29 @@ async def test_hard_cap_on_comments_limits_items_requested_and_stops():
 
 
 @pytest.mark.asyncio
-async def test_hard_cap_on_cost_stops_before_another_run():
+async def test_hard_cap_on_cost_is_never_exceeded():
     prov = FakeProvider([_post(f"P{i}", 100) for i in range(80)], per_post=5)
     c = InstagramCollector(provider=prov)
-    c.cost_per_run, c.cost_per_item = 0.2, 0.0
+    c.price_result, c.price_comment = 0.001, 0.01
     prog = PlatformProgress(platform="instagram")
     limits = CollectionLimits(target_comments=10_000, max_posts=500, apify_max_cost_usd=0.5)
-    await harvest_platform(c, PLAN, limits, prog)
-    assert c.runs == 2  # 1 discovery + 1 comments batch; third run (0.6 > 0.5) never starts
+    rows = await harvest_platform(c, PLAN, limits, prog)
     assert c.spent_estimate <= 0.5 + 1e-9
-    assert prog.stop_reason == "budget_cap_reached"
-    # server-side cap is passed to every run and never exceeds the remaining budget
+    assert prog.stop_reason == "budget_cap_reached" and c.runs == 2  # discovery + one comment batch
+    # the comment run was only allowed to ask for what the remaining budget can pay for
+    assert prov.comment_calls[0][2] == 42 and len(rows) <= 42
     assert all(call[3] <= 0.5 for call in prov.comment_calls + prov.search_calls)
+
+
+@pytest.mark.asyncio
+async def test_discovery_never_spends_more_than_its_share_of_the_budget():
+    prov = FakeProvider([_post("A", 5)])
+    c = InstagramCollector(provider=prov)
+    c.configure(CollectionLimits(apify_max_cost_usd=0.30, instagram_discovery_posts=500))
+    await c.discover(PLAN, 40)
+    _tags, per_tag, max_items, charge = prov.search_calls[0]
+    assert max_items == int(0.30 * 0.4 / 0.0027) == 44  # 40% of the cap at the real per-post price
+    assert per_tag * len(_tags) >= max_items and charge <= 0.30
 
 
 @pytest.mark.asyncio
