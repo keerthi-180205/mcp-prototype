@@ -282,6 +282,7 @@ async def chat_endpoint(request: Request):
         "description": profile_results.get("description", description),
         "platform": reached_str,
         "platforms_reached": reached_names,
+        "platform_status": profile_results.get("platform_status", {}),
         "chatbot_message": chatbot_message,
         "summary_message": chatbot_message,
         "ai_response_plan": profile_results.get("ai_response_plan", ""),
@@ -472,7 +473,8 @@ async def collect_export_endpoint(request: Request):
     mgr = _get_manager(request)
     try:
         mgr.status(job_id)  # Validate job exists
-        res = export_job(job_id, fmt=fmt, db_path=mgr.db_path)
+        full = request.query_params.get("full", "").lower() in ("1", "true", "yes")
+        res = export_job(job_id, fmt=fmt, db_path=mgr.db_path, full=full)
         file_path = str(res["path"])
         filename = f"{job_id}.{fmt}"
         media_type = "text/csv; charset=utf-8" if fmt == "csv" else "application/json"
@@ -509,44 +511,39 @@ async def assistant_message_endpoint(request: Request):
 
 
 async def credit_guard_status_endpoint(request: Request):
-    """Retrieve Credit-Guard routing matrix, savings, and credit ledger."""
-    from server.collection.credit_guard import get_credit_guard
-    from server.providers.socialcrawl.client import SocialCrawlClient
-    from server.providers.brightdata.client import BrightDataClient
+    """Real provider usage, budgets and health, read from the persistent ledger."""
+    from server.collection.ledger import get_budget, get_ledger
 
-    guard = get_credit_guard()
-    summary = guard.get_summary()
+    ledger = get_ledger()
+    days = 1
+    try:
+        days = max(1, min(30, int(request.query_params.get("days", 1))))
+    except (TypeError, ValueError):
+        pass
+    usage = ledger.summary(days=days)
 
-    sc_client = SocialCrawlClient()
-    bd_client = BrightDataClient()
-
-    bd_status = await bd_client.get_status()
+    env_keys = {
+        "truescrape": "TRUESCRAPE_API_KEY",
+        "socialcrawl": "SOCIALCRAWL_API_KEY",
+        "apify": "APIFY_API_TOKEN",
+        "brightdata": "BRIGHTDATA_API_KEY",
+    }
+    providers = {}
+    for name, env in env_keys.items():
+        providers[name] = {
+            "configured": bool(os.getenv(env)),
+            "blocked": ledger.blocked_reason(name),  # e.g. "SocialCrawl has no credits left"
+            "spent_last_24h": round(ledger.spent_today(name), 2),
+            "budget": get_budget(name),
+        }
+    providers["brightdata"]["serp_zone_configured"] = bool(os.getenv("BRIGHTDATA_SERP_ZONE"))
+    providers["brightdata"]["note"] = "SERP discovery for X / Instagram / LinkedIn (needs BRIGHTDATA_SERP_ZONE)"
 
     return JSONResponse({
         "status": "success",
-        "credit_guard": summary,
-        "providers_health": {
-            "socialcrawl": {
-                "configured": sc_client.is_configured,
-                "credits_remaining": sc_client.last_credits_remaining or 91,
-                "credits_used_session": sc_client.total_credits_used,
-            },
-            "brightdata": {
-                "configured": bd_client.is_configured,
-                "status": bd_status.get("status"),
-                "customer": bd_status.get("customer"),
-                "can_make_requests": bd_status.get("can_make_requests", False),
-                "auth_fail_reason": bd_status.get("auth_fail_reason"),
-            },
-            "truescrape": {
-                "configured": bool(os.getenv("TRUESCRAPE_API_KEY")),
-            },
-            "agent_reach_yt_dlp": {
-                "configured": True,
-                "tier": "free",
-                "cost_usd": 0.0,
-            },
-        },
+        "usage": usage,
+        "providers": providers,
+        "platforms": get_platforms_availability(),
     })
 
 
@@ -570,6 +567,7 @@ routes = [
     Route("/api/collect/{job_id}/results", endpoint=collect_results_endpoint, methods=["GET"]),
     Route("/api/collect/{job_id}/export", endpoint=collect_export_endpoint, methods=["GET"]),
     Route("/api/credit-guard/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
+    Route("/api/providers/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
     Route("/api/assistant/message", endpoint=assistant_message_endpoint, methods=["POST"]),
     Route("/api/chat", endpoint=chat_endpoint, methods=["POST"]),
     Route("/api/chat/export", endpoint=chat_export_endpoint, methods=["GET"]),

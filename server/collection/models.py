@@ -27,6 +27,10 @@ class CommentRow(BaseModel):
     likes: int = 0
     created_at: Optional[str] = None
     post_url: str
+    # Provenance / thread structure (optional: not every source provides them)
+    provider: Optional[str] = None
+    comment_id: Optional[str] = None
+    parent_id: Optional[str] = None
 
 
 class PostCandidate(BaseModel):

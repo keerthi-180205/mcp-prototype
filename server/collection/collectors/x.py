@@ -44,6 +44,7 @@ def tweet_url(tweet: Dict[str, Any]) -> str:
 
 class XCollector(PlatformCollector):
     platform = "x"
+    provider = "twitter-cli"
     batch_size = 1  # twitter-cli spaces its own requests; stay sequential to avoid rate limits
     concurrency = 1
 
@@ -68,6 +69,7 @@ class XCollector(PlatformCollector):
 
     # ---- discovery -----------------------------------------------------------------
     async def _search(self, query: str, tab: str, count: int) -> List[Dict[str, Any]]:
+        """Run one search. Raises CliError on failure; discover() decides whether that is fatal."""
         try:
             _, out, _ = await run_cli(
                 [self.binary or "twitter", "search", query, "-t", tab, "-n", str(count),
@@ -78,7 +80,7 @@ class XCollector(PlatformCollector):
             return _parse(out)
         except CliError as exc:
             logger.warning("X search failed: %s", exc)
-            return []
+            raise
 
     @staticmethod
     def _candidate(t: Dict[str, Any]) -> Optional[PostCandidate]:
@@ -110,12 +112,21 @@ class XCollector(PlatformCollector):
         count = max(10, min(100, self.SEARCH_COUNT))
 
         found: Dict[str, PostCandidate] = {}
+        failures: List[CliError] = []
         # sequential: each search is a handful of API calls and X rate-limits aggressively
         for q, tab in queries:
-            for t in await self._search(q, tab, count):
+            try:
+                results = await self._search(q, tab, count)
+            except CliError as exc:
+                failures.append(exc)
+                continue
+            for t in results:
                 cand = self._candidate(t)
                 if cand and cand.post_id not in found:
                     found[cand.post_id] = cand
+        if failures and len(failures) == len(queries):
+            # Not "no results": every search errored (expired cookies, X changed its web client, ...)
+            raise CliError(f"all {len(queries)} X searches failed; last: {failures[-1]}")
         return list(found.values())
 
     # ---- comments ------------------------------------------------------------------

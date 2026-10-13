@@ -4,7 +4,7 @@ import asyncio
 import logging
 import math
 import time
-from typing import Callable, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from server.collection.cleaning import clean_comments
 from server.collection.collectors.base import CollectorFatalError, PlatformCollector
@@ -63,8 +63,13 @@ async def harvest_platform(
     limits: CollectionLimits,
     progress: PlatformProgress,
     on_rows: Optional[RowSink] = None,
+    post_index: Optional[Dict[str, PostCandidate]] = None,
 ) -> List[CommentRow]:
-    """Discover, rank and harvest one platform. Never raises: failures land in `progress`."""
+    """Discover, rank and harvest one platform. Never raises: failures land in `progress`.
+
+    If `post_index` is given it is filled with the ranked posts by URL, so callers can show a
+    comment next to the post it came from.
+    """
     started = time.monotonic()
     deadline = started + limits.max_seconds
     collected: List[CommentRow] = []
@@ -97,6 +102,8 @@ async def harvest_platform(
 
         queue = rank_candidates(plan.topic, found, limits.min_relevance)
         progress.candidates_found = len(queue)
+        if post_index is not None:
+            post_index.update({c.url: c for c in queue})
         _tick()
         if not queue:
             progress.stop_reason = STOP_NO_MORE

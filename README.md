@@ -244,7 +244,7 @@ The server listens on standard input/output (`stdio`) for Model Context Protocol
 
 ## Testing
 
-Run the full automated test suite (110 offline tests covering all tools, connectors, validation, prompts, Gemini client, configuration, logging, and resilience):
+Run the full automated test suite (hermetic: `tests/conftest.py` blanks all API keys and isolates the database, so it never spends credits; 286 offline tests covering all tools, connectors, validation, prompts, Gemini client, configuration, logging, and resilience):
 
 ```bash
 pytest
@@ -287,12 +287,50 @@ platform, opens their comment sections and collects the **commenters** (not the 
 user id and comment text. It keeps moving to the next-best post until `target_comments` per platform
 (default 500) is reached or a limit (max posts, max time, Apify budget) is hit.
 
-| Platform | Backend | Credentials |
+Each platform is served by a **provider chain**: free tools first, then cheap REST APIs, then expensive
+batch actors. The chain works per operation (finding posts vs. reading comments) because providers are not
+equally capable. A provider that fails, runs out of credits or hits its budget is switched off for the job
+and the next one takes over; every stored row records which provider served it.
+
+| Platform | Find posts | Read comments |
 |---|---|---|
-| Instagram | Apify (`instagram-scraper` + `instagram-comment-scraper`) | `APIFY_API_TOKEN` |
-| YouTube | `yt-dlp` (no login) | - |
-| Reddit | `rdt-cli` | `REDDIT_SESSION` (the `reddit_session` cookie) |
-| X / Twitter | `twitter-cli` | `TWITTER_AUTH_TOKEN`, `TWITTER_CT0` |
+| YouTube | `yt-dlp` (free) | `yt-dlp` (free) |
+| Reddit | `rdt-cli` (free, `REDDIT_SESSION`) > TrueScrape > SocialCrawl | same order (TrueScrape adds reply threads) |
+| X / Twitter | `twitter-cli` (free, cookies) > **Bright Data SERP** (Google) > SocialCrawl | `twitter-cli` > SocialCrawl |
+| Instagram | **Bright Data SERP** > Apify > SocialCrawl | **TrueScrape** (cheap) > Apify > SocialCrawl |
+| LinkedIn | Bright Data SERP > SocialCrawl | SocialCrawl (the only comment source) |
+
+Known provider status (checked live, Oct 2026): TrueScrape's Instagram *discovery* endpoints are blocked upstream
+(they need residential proxies) so Instagram posts are found via Apify, while TrueScrape reads the comments;
+TrueScrape has no X search/replies and no LinkedIn comments; `twitter-cli` 0.8.5 currently fails on X search
+("Failed to init ClientTransaction"); SocialCrawl needs credits for LinkedIn. `GET /api/providers/status`
+shows what is usable right now and why.
+
+**Bright Data SERP (free tier).** Bright Data's free tier is 5,000 credits a month (no card, no rollover,
+shared by SERP / Web Unlocker / Web Scraper). Create a "SERP API" zone in its control panel and set
+`BRIGHTDATA_SERP_ZONE` in `.env`; `python scripts/serp_search.py --zones` lists your zones. SERP finds posts
+through Google (`site:x.com inurl:status "topic"`, `site:instagram.com topic`, `site:linkedin.com/posts topic`),
+1 credit per result page; it never reads comments, so the chain pairs it with whoever can. It also finds
+professionals' public profiles from the command line:
+
+```bash
+python scripts/serp_search.py 'site:linkedin.com/in clinical psychologist Bangalore' --pages 3 --csv
+```
+
+Bright Data reports success in response headers (HTTP is always 200) and does not bill failed requests; the client
+retries captchas and rejected queries. Google sometimes ignores the `site:` operator and the page is still billed, so
+such pages are flagged `degraded`, never cached, and off-target CLI rows are marked `?`. The default cap is
+150 credits a day (`BUDGET_BRIGHTDATA_PER_DAY`) so the free pool lasts the month.
+
+**Credit protection.** Every paid call goes through a persistent ledger (`server/collection/ledger.py`,
+SQLite): responses are cached (24h comments / 6h searches) so re-running a topic never pays twice, usage is
+logged per provider, and `BUDGET_<PROVIDER>_PER_JOB` / `_PER_DAY` limits (see `.env.example`) switch a
+provider off when reached. A provider that reports "no credits" or a bad key is remembered as blocked for
+30 minutes instead of being retried by every job. Instagram is only collected when the request names it.
+
+**No invented data.** If a provider returns nothing the platform simply contributes nothing and the reason is
+reported in the job notes; there are no placeholder users, likes or dates. `scripts/purge_synthetic_rows.py`
+removes rows written by earlier versions that did (dry run by default, backs up the database first).
 
 Collection takes minutes, so it is an async job:
 
@@ -353,7 +391,8 @@ Open `http://localhost:8080` in your web browser.
 | `POST` | `/api/collect/start` | Starts background collection job (`topic, platforms, target_comments, max_posts, max_minutes`). |
 | `GET` | `/api/collect/{job_id}/status` | Live status, per-platform stage, posts processed, and comments count. |
 | `GET` | `/api/collect/{job_id}/results` | Paginated comments with optional `platform` filter, `page`, `page_size`. |
-| `GET` | `/api/collect/{job_id}/export` | Direct file attachment download (`?format=csv` with UTF-8 BOM or `?format=json`). |
+| `GET` | `/api/collect/{job_id}/export` | Direct file attachment download (`?format=csv` with UTF-8 BOM or `?format=json`; add `&full=1` for provider, comment_id, parent_id and collected_at columns). |
+| `GET` | `/api/providers/status` | Provider usage, budgets, blocked providers and per-platform chains (never exposes secrets). |
 | `POST` | `/api/assistant/message` | Conversational assistant message dispatch (`session_id, text, action?`). |
 
 ## Instagram + Apify Demo

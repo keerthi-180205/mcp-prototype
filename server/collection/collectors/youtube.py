@@ -45,6 +45,7 @@ def _parse_json_lines(text: str) -> List[Dict[str, Any]]:
 
 class YouTubeCollector(PlatformCollector):
     platform = "youtube"
+    provider = "yt-dlp"
     batch_size = 3
     concurrency = 3
 

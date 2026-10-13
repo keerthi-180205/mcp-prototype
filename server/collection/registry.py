@@ -1,27 +1,41 @@
-"""Factory for platform collectors."""
+"""Factory for platform collectors: one provider chain per platform, cheapest provider first."""
 
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from server.collection.collectors.base import PlatformCollector
+from server.collection.collectors.chain import ChainedCollector
 from server.collection.models import SUPPORTED_PLATFORMS
 
 
-def _factories():
+def _chain_spec() -> Dict[str, List[Callable[[], PlatformCollector]]]:
+    """Ordered backends per platform: free tools, then cheap REST APIs, then batch actors.
+
+    Capabilities are per backend (TrueScrape/Instagram can only read comments, Apify can do both),
+    so the same list serves both discovery and comment fetching.
+    """
+    from server.collection.collectors.instagram import InstagramCollector
+    from server.collection.collectors.reddit import RedditCollector
+    from server.collection.collectors.serp import SerpDiscoveryBackend
+    from server.collection.collectors.socialcrawl import SocialCrawlBackend
+    from server.collection.collectors.truescrape import TrueScrapeBackend
+    from server.collection.collectors.x import XCollector
     from server.collection.collectors.youtube import YouTubeCollector
 
-    table = {"youtube": YouTubeCollector}
-    for name, module, cls in (
-        ("instagram", "instagram", "InstagramCollector"),
-        ("reddit", "reddit", "RedditCollector"),
-        ("x", "x", "XCollector"),
-        ("linkedin", "linkedin", "LinkedInCollector"),
-    ):
-        try:
-            mod = __import__(f"server.collection.collectors.{module}", fromlist=[cls])
-            table[name] = getattr(mod, cls)
-        except ImportError:
-            continue
-    return table
+    return {
+        "youtube": [YouTubeCollector],
+        "reddit": [RedditCollector, lambda: TrueScrapeBackend("reddit"), lambda: SocialCrawlBackend("reddit")],
+        # twitter-cli reads replies for free; its search is broken (Oct 2026), so Google (SERP) finds the tweets
+        "x": [XCollector, lambda: SerpDiscoveryBackend("x"), lambda: SocialCrawlBackend("x")],
+        # SERP finds posts cheaply, TrueScrape reads their comments, Apify is the pricey fallback for both
+        "instagram": [
+            lambda: SerpDiscoveryBackend("instagram"),
+            lambda: TrueScrapeBackend("instagram"),
+            InstagramCollector,
+            lambda: SocialCrawlBackend("instagram"),
+        ],
+        # comments still need SocialCrawl; SERP only adds a second way to find posts
+        "linkedin": [lambda: SerpDiscoveryBackend("linkedin"), lambda: SocialCrawlBackend("linkedin")],
+    }
 
 
 def normalize_platforms(platforms: Optional[List[str]]) -> List[str]:
@@ -36,8 +50,8 @@ def normalize_platforms(platforms: Optional[List[str]]) -> List[str]:
     return out
 
 
-def get_collector(platform: str) -> PlatformCollector:
-    table: Dict[str, type] = _factories()
-    if platform not in table:
+def get_collector(platform: str) -> ChainedCollector:
+    spec = _chain_spec()
+    if platform not in spec:
         raise ValueError(f"Unsupported or not yet implemented platform: {platform}")
-    return table[platform]()
+    return ChainedCollector(platform, [make() for make in spec[platform]])

@@ -24,6 +24,7 @@ def _post_key(url: Optional[str]) -> str:
 
 class InstagramCollector(PlatformCollector):
     platform = "instagram"
+    provider = "apify"
     batch_size = 25  # posts per Actor run: one run is far cheaper than one run per post
 
     def __init__(self, provider: Optional[ApifyInstagramProvider] = None, token: Optional[str] = None):
@@ -41,7 +42,7 @@ class InstagramCollector(PlatformCollector):
         self.runs = 0
 
     @property
-    def provider(self) -> ApifyInstagramProvider:
+    def apify(self) -> ApifyInstagramProvider:
         if self._provider is None:
             self._provider = ApifyInstagramProvider()
         return self._provider
@@ -102,7 +103,7 @@ class InstagramCollector(PlatformCollector):
         tags = tags[: max(1, total)]
         per_tag = -(-total // len(tags))
         try:
-            items = await self.provider.search_hashtags(
+            items = await self.apify.search_hashtags(
                 tags,
                 per_tag,
                 max_items=total,
@@ -137,56 +138,7 @@ class InstagramCollector(PlatformCollector):
                 view_count=it.get("videoViewCount") or it.get("videoPlayCount"),
                 published_at=it.get("timestamp"),
             )
-        if not out:
-            synd_candidates = await self._discover_syndication(plan, limit)
-            for cand in synd_candidates:
-                out[_post_key(cand.url)] = cand
         return list(out.values())
-
-    async def _discover_syndication(self, plan: QueryPlan, limit: int) -> List[PostCandidate]:
-        import asyncio
-        import feedparser
-        import html
-        import re
-        import urllib.parse
-        candidates: List[PostCandidate] = []
-        queries = [plan.topic]
-        if plan.keywords:
-            queries.extend(plan.keywords[:2])
-        loop = asyncio.get_event_loop()
-        for q in queries:
-            if len(candidates) >= limit:
-                break
-            encoded = urllib.parse.quote(f"{q} site:instagram.com/reel OR site:instagram.com/p")
-            url = f"https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en"
-            try:
-                feed = await loop.run_in_executor(None, feedparser.parse, url)
-                for entry in getattr(feed, "entries", []):
-                    if len(candidates) >= limit:
-                        break
-                    raw_title = getattr(entry, "title", "")
-                    clean_text = html.unescape(raw_title).strip()
-                    if not clean_text or len(clean_text) < 5:
-                        continue
-                    link = getattr(entry, "link", "")
-                    m = re.search(r"instagram\.com/(?:reel|p)/([A-Za-z0-9_-]+)", link or clean_text)
-                    shortcode = m.group(1) if m else f"ig_{len(candidates)}"
-                    post_url = f"https://www.instagram.com/p/{shortcode}/" if m else link
-                    candidates.append(
-                        PostCandidate(
-                            platform="instagram",
-                            post_id=shortcode,
-                            url=post_url,
-                            title=clean_text[:180],
-                            text=clean_text,
-                            author_username="instagram_creator",
-                            comment_count=10,
-                            like_count=50,
-                        )
-                    )
-            except Exception as e:
-                logger.warning("Instagram syndication discovery failed for %s: %s", q, e)
-        return candidates
 
     # ---- comments ------------------------------------------------------------------
     async def fetch_post_comments(self, post: PostCandidate, max_comments: int) -> List[CommentRow]:
@@ -202,7 +154,7 @@ class InstagramCollector(PlatformCollector):
         if max_items < 1:
             return {}
         try:
-            items = await self.provider.get_comments_batch(
+            items = await self.apify.get_comments_batch(
                 [p.url for p in posts],
                 max(wanted.values()),
                 max_items=max_items,

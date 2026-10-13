@@ -102,6 +102,9 @@ class Settings:
     brightdata_timeout: float = field(
         default_factory=lambda: float(os.getenv("BRIGHTDATA_TIMEOUT", "30.0"))
     )
+    # Zones are created in the Bright Data control panel (names, not secrets)
+    brightdata_serp_zone: Optional[str] = field(default_factory=lambda: os.getenv("BRIGHTDATA_SERP_ZONE") or None)
+    brightdata_serp_country: Optional[str] = field(default_factory=lambda: os.getenv("BRIGHTDATA_SERP_COUNTRY") or None)
 
     # Apify API Configuration
     apify_api_token: Optional[str] = field(

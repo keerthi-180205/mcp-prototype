@@ -44,116 +44,52 @@ MAX_REQUESTS_PER_MINUTE = 30
 # Platform Availability Helper
 # ---------------------------------------------------------------------------
 
+FREE_PROVIDERS = {"yt-dlp", "rdt-cli", "twitter-cli"}
+PROVIDER_LABELS = {
+    "yt-dlp": "yt-dlp (free)",
+    "rdt-cli": "rdt-cli (free)",
+    "twitter-cli": "twitter-cli (free)",
+    "truescrape": "TrueScrape",
+    "socialcrawl": "SocialCrawl",
+    "apify": "Apify",
+    "brightdata": "Bright Data SERP",
+}
+
+
 def get_platforms_availability() -> Dict[str, Dict[str, Any]]:
-    """Query available platforms and reason. Returns booleans and reasons only, NEVER secrets.
-    Availability powered by Credit-Guard Multi-Provider Router:
-      youtube = yt-dlp installed (Tier 0 Free, 0 credits consumed)
-      instagram = TrueScrape API / SocialCrawl
-      reddit = TrueScrape API / SocialCrawl / rdt-cli
-      x = SocialCrawl API (verified HTTP 200) / twitter-cli
-      linkedin = SocialCrawl API (verified HTTP 200)
+    """Per-platform availability, computed from the real provider chains. Never exposes secrets.
+
+    A platform is available when some provider can find posts AND some provider can read their
+    comments. A provider that is configured but known to be out of credits counts as unavailable
+    (the reason says so), so the UI never offers a platform that cannot deliver.
     """
+    from server.collection.registry import get_collector
+
     out: Dict[str, Dict[str, Any]] = {}
-
-    # YouTube: yt-dlp installed (Tier 0 Free)
-    yt_installed = bool(find_binary("yt-dlp"))
-    out["youtube"] = {
-        "available": yt_installed,
-        "reason": "Agent Reach yt-dlp ready (Tier 0: 100% Free, 0 API credits consumed)" if yt_installed else "yt-dlp is not installed (pip install yt-dlp)",
-        "tier": "free",
-        "provider": "yt-dlp",
-    }
-
-    # Instagram: TrueScrape / SocialCrawl / Apify
-    has_truescrape = bool(os.getenv("TRUESCRAPE_API_KEY"))
-    has_socialcrawl = bool(os.getenv("SOCIALCRAWL_API_KEY"))
-    has_apify = bool(os.getenv("APIFY_API_TOKEN"))
-    if has_truescrape:
-        out["instagram"] = {
-            "available": True,
-            "reason": "TrueScrape REST API ready (Tier 1 Primary)",
-            "tier": "rest",
-            "provider": "truescrape",
+    for platform in SUPPORTED_PLATFORMS:
+        desc = get_collector(platform).describe()
+        discover, comments = desc["discover"], desc["comments"]
+        available = bool(discover) and bool(comments)
+        primary = comments[0] if comments else None
+        if available:
+            reason = "Find posts: {} | Read comments: {}".format(
+                " > ".join(PROVIDER_LABELS.get(p, p) for p in discover),
+                " > ".join(PROVIDER_LABELS.get(p, p) for p in comments),
+            )
+        else:
+            missing = "find posts" if not discover else "read comments"
+            why = "; ".join(f"{PROVIDER_LABELS.get(p, p)}: {r}" for p, r in desc["unavailable"].items())
+            reason = f"No provider can {missing} on {platform}" + (f" ({why})" if why else "")
+        entry: Dict[str, Any] = {
+            "available": available,
+            "reason": reason,
+            "providers": {"discover": discover, "comments": comments},
+            "unavailable_providers": desc["unavailable"],
         }
-    elif has_socialcrawl:
-        out["instagram"] = {
-            "available": True,
-            "reason": "SocialCrawl REST API ready",
-            "tier": "rest",
-            "provider": "socialcrawl",
-        }
-    elif has_apify:
-        out["instagram"] = {
-            "available": True,
-            "reason": "Apify actor ready",
-            "tier": "batch",
-            "provider": "apify",
-        }
-    else:
-        out["instagram"] = {
-            "available": False,
-            "reason": "TRUESCRAPE_API_KEY is not set",
-        }
-
-    # Reddit: TrueScrape / SocialCrawl / rdt-cli
-    has_reddit_cred = bool(os.getenv("REDDIT_SESSION")) or credential_path().exists()
-    if has_truescrape:
-        out["reddit"] = {
-            "available": True,
-            "reason": "TrueScrape REST API ready with nested comment threads (Tier 1 Primary)",
-            "tier": "rest",
-            "provider": "truescrape",
-        }
-    elif has_socialcrawl:
-        out["reddit"] = {
-            "available": True,
-            "reason": "SocialCrawl REST API ready (Tier 1 Fallback)",
-            "tier": "rest",
-            "provider": "socialcrawl",
-        }
-    elif has_reddit_cred:
-        out["reddit"] = {
-            "available": True,
-            "reason": "Reddit session credentials found via rdt-cli",
-            "tier": "free",
-            "provider": "rdt-cli",
-        }
-    else:
-        out["reddit"] = {
-            "available": False,
-            "reason": "Neither TRUESCRAPE_API_KEY, SOCIALCRAWL_API_KEY, nor REDDIT_SESSION configured",
-        }
-
-    # X / Twitter: SocialCrawl / twitter-cli
-    has_tw = bool(os.getenv("TWITTER_AUTH_TOKEN")) and bool(os.getenv("TWITTER_CT0"))
-    if has_socialcrawl:
-        out["x"] = {
-            "available": True,
-            "reason": "SocialCrawl REST API ready (Tier 1 Primary, HTTP 200 verified)",
-            "tier": "rest",
-            "provider": "socialcrawl",
-        }
-    elif has_tw:
-        out["x"] = {
-            "available": True,
-            "reason": "Twitter/X session tokens configured via twitter-cli",
-            "tier": "free",
-            "provider": "twitter-cli",
-        }
-    else:
-        out["x"] = {
-            "available": False,
-            "reason": "Neither SOCIALCRAWL_API_KEY nor TWITTER_AUTH_TOKEN configured",
-        }
-
-    # LinkedIn: SocialCrawl / Syndication
-    out["linkedin"] = {
-        "available": True,
-        "reason": "SocialCrawl & Live Syndication ready (Tier 1 Primary)",
-        "tier": "rest",
-        "provider": "syndication",
-    }
-
+        if primary:
+            entry["provider"] = primary
+            entry["tier"] = "free" if primary in FREE_PROVIDERS else "paid"
+        out[platform] = entry
     return out
 
 
@@ -717,8 +653,9 @@ async def handle_assistant_message(
                     else:
                         unavailable_requested.append({"platform": p_norm, "reason": avail[p_norm]["reason"]})
         else:
-            # Default: include ALL available platforms across Instagram, Reddit, X, LinkedIn, and YouTube
-            for p in ("instagram", "reddit", "x", "linkedin", "youtube"):
+            # Default: every available platform except Instagram, which spends paid credits and
+            # is only collected when the user names it.
+            for p in ("reddit", "x", "linkedin", "youtube"):
                 if avail.get(p, {}).get("available"):
                     chosen_platforms.append(p)
 
