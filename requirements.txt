@@ -8,3 +8,6 @@ pytest-asyncio>=0.23.0
 yt-dlp>=2026.8.19
 twitter-cli>=0.8.5
 rdt-cli>=0.4.1
+feedparser>=6.0
+starlette>=0.37
+uvicorn>=0.30
