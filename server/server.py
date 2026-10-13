@@ -72,6 +72,14 @@ from server.providers.apify import (
     ApifyConnectionError,
     ApifyEmptyDatasetError,
 )
+from server.providers.truescrape import (
+    TrueScrapeInstagramProvider,
+    TrueScrapeError,
+    TrueScrapeAuthenticationError,
+    TrueScrapeRateLimitError,
+    TrueScrapeTimeoutError,
+    TrueScrapeConnectionError,
+)
 from server.services.instagram import (
     InstagramService,
     InstagramServiceError,
@@ -99,7 +107,11 @@ dataset_validator = DatasetValidator()
 gemini_client = GeminiClient(settings=settings)
 apify_client = ApifyClient(settings=settings)
 apify_instagram_provider = ApifyInstagramProvider(client=apify_client, settings=settings)
-instagram_service = InstagramService(provider=apify_instagram_provider)
+truescrape_instagram_provider = TrueScrapeInstagramProvider(settings=settings)
+instagram_service = InstagramService(
+    provider=truescrape_instagram_provider if truescrape_instagram_provider.is_available() else apify_instagram_provider,
+    truescrape_provider=truescrape_instagram_provider,
+)
 social_service = get_social_intelligence_service()
 
 
@@ -714,7 +726,27 @@ def _handle_instagram_error(exc: Exception) -> Dict[str, Any]:
             "error": "apify_connection_error",
             "message": "Failed to connect to Apify API.",
         }
-    elif isinstance(exc, (ApifyError, InstagramServiceError)):
+    elif isinstance(exc, TrueScrapeAuthenticationError):
+        return {
+            "error": "truescrape_auth_error",
+            "message": str(exc),
+        }
+    elif isinstance(exc, TrueScrapeRateLimitError):
+        return {
+            "error": "truescrape_rate_limit",
+            "message": "TrueScrape API rate limit exceeded.",
+        }
+    elif isinstance(exc, TrueScrapeTimeoutError):
+        return {
+            "error": "truescrape_timeout",
+            "message": "TrueScrape request timed out.",
+        }
+    elif isinstance(exc, TrueScrapeConnectionError):
+        return {
+            "error": "truescrape_connection_error",
+            "message": "Failed to connect to TrueScrape API.",
+        }
+    elif isinstance(exc, (ApifyError, TrueScrapeError, InstagramServiceError)):
         return {
             "error": "apify_error",
             "message": str(exc),

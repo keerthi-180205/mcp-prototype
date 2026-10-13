@@ -4,7 +4,8 @@ import {
   Loader2,
   ExternalLink,
   TrendingUp,
-  SlidersHorizontal
+  SlidersHorizontal,
+  FileSpreadsheet
 } from 'lucide-react'
 
 export default function DiscoveryStudio() {
@@ -31,7 +32,7 @@ export default function DiscoveryStudio() {
           query: q,
           description: q,
           field: q,
-          connected_platforms: ['youtube', 'reddit', 'twitter']
+          connected_platforms: ['youtube', 'reddit', 'twitter', 'instagram', 'linkedin']
         })
       })
 
@@ -112,23 +113,43 @@ export default function DiscoveryStudio() {
                 </div>
               </div>
 
-              {/* Filter pills */}
-              <div className="filter-btn-group">
-                <button
-                  onClick={() => setFilterPlatform('all')}
-                  className={`filter-pill ${filterPlatform === 'all' ? 'active' : ''}`}
-                >
-                  All
-                </button>
-                {['YouTube', 'Reddit', 'Twitter'].map(p => (
+              {/* Filter pills & CSV Export */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div className="filter-btn-group">
                   <button
-                    key={p}
-                    onClick={() => setFilterPlatform(p)}
-                    className={`filter-pill ${filterPlatform === p ? 'active' : ''}`}
+                    onClick={() => setFilterPlatform('all')}
+                    className={`filter-pill ${filterPlatform === 'all' ? 'active' : ''}`}
                   >
-                    {p}
+                    All
                   </button>
-                ))}
+                  {['Instagram', 'LinkedIn', 'Reddit', 'Twitter', 'YouTube'].map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setFilterPlatform(p)}
+                      className={`filter-pill ${filterPlatform.toLowerCase() === p.toLowerCase() ? 'active' : ''}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => {
+                    const url = results?.csv_download_url || '/api/chat/export?filename=latest_scraped_comments.csv'
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = results?.csv_file || 'scraped_comments.csv'
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                  }}
+                  className="download-btn"
+                  style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                  title="Download comments as CSV"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" style={{ color: '#10a37f' }} />
+                  <span>Export CSV</span>
+                </button>
               </div>
             </div>
 

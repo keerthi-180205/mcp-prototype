@@ -126,7 +126,7 @@ _COLS = "platform, username, user_id, comment, likes, created_at, post_url"
 
 
 def get_comments(
-    job_id: str,
+    job_id: Optional[str] = None,
     platform: Optional[str] = None,
     offset: int = 0,
     limit: int = 50,
@@ -135,8 +135,11 @@ def get_comments(
     init_comment_tables(db_path)
     conn = get_connection(db_path)
     try:
-        sql = f"SELECT {_COLS} FROM collected_comments WHERE job_id=?"
-        params: List[Any] = [job_id]
+        sql = f"SELECT {_COLS} FROM collected_comments WHERE 1=1"
+        params: List[Any] = []
+        if job_id and job_id != "all":
+            sql += " AND job_id=?"
+            params.append(job_id)
         if platform:
             sql += " AND platform=?"
             params.append(platform)
@@ -147,7 +150,7 @@ def get_comments(
         conn.close()
 
 
-def iter_all_comments(job_id: str, db_path: Optional[str] = None, chunk: int = 1000):
+def iter_all_comments(job_id: Optional[str] = None, db_path: Optional[str] = None, chunk: int = 1000):
     offset = 0
     while True:
         batch = get_comments(job_id, offset=offset, limit=chunk, db_path=db_path)

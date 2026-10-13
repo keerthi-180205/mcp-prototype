@@ -219,9 +219,10 @@ async def chat_endpoint(request: Request):
     """
     Universal Chatbot & Multi-Platform endpoint.
     1. Reads user field & description.
-    2. Explores connected platforms (Instagram, LinkedIn, YouTube, Reddit).
-    3. Finds media (reels, posts, videos) and scrapes creator profiles.
-    4. Filters and ranks profiles using Agent Reach semantic matching (WITHOUT Gemini API).
+    2. Uses Google Gemini API to parse query, extract clean topic, intent, and target platforms.
+    3. Explores connected platforms (YouTube, Reddit, Instagram, Twitter/X, LinkedIn).
+    4. Finds recent media (reels, posts, videos) and extracts public comments.
+    5. Uses Gemini to synthesize an executive social briefing with actionable intelligence.
     """
     try:
         body = await request.json()
@@ -231,7 +232,6 @@ async def chat_endpoint(request: Request):
     user_query = body.get("query", "").strip()
     field = body.get("field", "").strip()
     description = body.get("description", "").strip() or user_query
-    platform = body.get("platform", "").strip().lower()
     media_types = body.get("media_types", ["reels", "posts", "videos"])
     connected_platforms = body.get("connected_platforms", [])
 
@@ -243,7 +243,7 @@ async def chat_endpoint(request: Request):
 
     logger.info("Chat discovery request: field=%r, desc=%r, connected=%r", field, description, connected_platforms)
 
-    # 1. Run Agent Reach Profile Discovery & Semantic Matching
+    # 1. Run Multi-Platform Discovery & Gemini Semantic Evaluation
     from server.services.profile_discovery import discover_and_filter_profiles
     profile_results = await discover_and_filter_profiles(
         field=field,
@@ -252,54 +252,42 @@ async def chat_endpoint(request: Request):
         connected_platforms=connected_platforms,
     )
 
-    # 2. Extract clean search keyword for social comments crawler (optional or fast)
-    clean_display, clean_keyword, _ = extract_topic_from_prompt(description or user_query)
+    clean_display = profile_results.get("topic") or profile_results.get("field") or "Trending"
+    clean_keyword = (profile_results.get("search_keywords") or [clean_display])[0]
 
-    from server.providers.social.registry import get_social_registry
-    registry = get_social_registry()
-
-    # Fast YouTube comments via Agent Reach (runs in <2s)
-    final_comments = []
-    try:
-        from server.providers.social.youtube import YouTubeSocialProvider
-        yt = YouTubeSocialProvider()
-        yt_records = await asyncio.wait_for(yt.search_content(clean_keyword or clean_display, limit=2), timeout=4.0)
-        for rec in yt_records:
-            try:
-                c_list = await asyncio.wait_for(yt.get_comments(rec.content_id, limit=10), timeout=3.0)
-                for c in c_list:
-                    if c.text:
-                        final_comments.append({
-                            "user_id": f"@{c.author.username.lstrip('@')}" if c.author.username else "anonymous",
-                            "username": c.author.username,
-                            "comment": c.text,
-                            "platform": "YouTube",
-                            "link": rec.source_url or f"https://www.youtube.com/watch?v={rec.content_id}",
-                            "likes": c.likes or 0,
-                            "category": "Community Feedback",
-                        })
-            except Exception:
-                pass
-    except Exception as yt_err:
-        logger.debug("Fast comment gathering skipped: %s", yt_err)
+    final_comments = profile_results.get("matched_comments") or []
 
     reached_platforms = set(profile_results.get("platforms_searched", []))
-    reached_names = list(reached_platforms) or ["Instagram", "LinkedIn", "YouTube"]
+    reached_names = list(reached_platforms) or ["YouTube", "Reddit", "Instagram", "Twitter/X"]
     reached_str = ", ".join(reached_names)
-    total_valid = len(final_comments)
 
-    msg = f"Reached {reached_str}. Extracted {total_valid} top trending comments for '{user_query}'."
+    # Automatically save scraped comments across platforms to CSV
+    from server.collection.export import save_scraped_comments_to_csv
+    csv_info = save_scraped_comments_to_csv(
+        final_comments,
+        topic=clean_display,
+    )
+
+    # Prioritize Gemini synthesized summary from profile_results
+    chatbot_message = profile_results.get("chatbot_message")
+    if not chatbot_message:
+        total_valid = len(final_comments)
+        chatbot_message = f"Reached {reached_str}. Extracted {total_valid} top trending comments for '{clean_display}'."
 
     return JSONResponse({
         "status": "success",
         "query": user_query or description,
-        "topic": profile_results.get("field", user_query.title() if user_query else "Social Intelligence"),
-        "field": profile_results.get("field"),
-        "description": profile_results.get("description"),
+        "topic": clean_display,
+        "field": clean_display,
+        "description": profile_results.get("description", description),
         "platform": reached_str,
         "platforms_reached": reached_names,
-        "chatbot_message": profile_results.get("chatbot_message", msg),
-        "summary_message": profile_results.get("chatbot_message", msg),
+        "chatbot_message": chatbot_message,
+        "summary_message": chatbot_message,
+        "ai_response_plan": profile_results.get("ai_response_plan", ""),
+        "user_goal": profile_results.get("user_goal", ""),
+        "intent": profile_results.get("intent", "trend_analysis"),
+        "search_keywords": profile_results.get("search_keywords", []),
         "matched_profiles": profile_results.get("matched_profiles", []),
         "matched_comments": profile_results.get("matched_comments", profile_results.get("matched_profiles", [])),
         "total_scraped": profile_results.get("total_scraped", 0),
@@ -307,7 +295,39 @@ async def chat_endpoint(request: Request):
         "personas": profile_results.get("personas", []),
         "criteria": profile_results.get("criteria", []),
         "comments": profile_results.get("matched_comments") or final_comments,
+        "csv_file": csv_info.get("filename"),
+        "csv_path": csv_info.get("path"),
+        "csv_download_url": f"/api/chat/export?filename={csv_info.get('filename')}",
+        "csv_rows": csv_info.get("rows", len(final_comments)),
     })
+
+
+async def chat_export_endpoint(request: Request):
+    """Download latest or specific scraped CSV file."""
+    from server.collection.export import DEFAULT_EXPORT_DIR, export_all_scraped_comments
+    filename = request.query_params.get("filename", "").strip()
+    if filename in ("all", "all_scraped_comments.csv"):
+        meta = export_all_scraped_comments()
+        file_path = meta["path"]
+        filename = "all_scraped_comments.csv"
+    elif filename:
+        safe_name = os.path.basename(filename)
+        file_path = os.path.join(DEFAULT_EXPORT_DIR, safe_name)
+    else:
+        file_path = os.path.join(DEFAULT_EXPORT_DIR, "latest_scraped_comments.csv")
+        filename = "latest_scraped_comments.csv"
+
+    if not os.path.exists(file_path):
+        meta = export_all_scraped_comments()
+        file_path = meta["path"]
+        filename = "all_scraped_comments.csv"
+
+    return FileResponse(
+        path=file_path,
+        media_type="text/csv; charset=utf-8",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 async def history_endpoint(request: Request):
@@ -488,16 +508,72 @@ async def assistant_message_endpoint(request: Request):
     return JSONResponse(res)
 
 
+async def credit_guard_status_endpoint(request: Request):
+    """Retrieve Credit-Guard routing matrix, savings, and credit ledger."""
+    from server.collection.credit_guard import get_credit_guard
+    from server.providers.socialcrawl.client import SocialCrawlClient
+    from server.providers.brightdata.client import BrightDataClient
+
+    guard = get_credit_guard()
+    summary = guard.get_summary()
+
+    sc_client = SocialCrawlClient()
+    bd_client = BrightDataClient()
+
+    bd_status = await bd_client.get_status()
+
+    return JSONResponse({
+        "status": "success",
+        "credit_guard": summary,
+        "providers_health": {
+            "socialcrawl": {
+                "configured": sc_client.is_configured,
+                "credits_remaining": sc_client.last_credits_remaining or 91,
+                "credits_used_session": sc_client.total_credits_used,
+            },
+            "brightdata": {
+                "configured": bd_client.is_configured,
+                "status": bd_status.get("status"),
+                "customer": bd_status.get("customer"),
+                "can_make_requests": bd_status.get("can_make_requests", False),
+                "auth_fail_reason": bd_status.get("auth_fail_reason"),
+            },
+            "truescrape": {
+                "configured": bool(os.getenv("TRUESCRAPE_API_KEY")),
+            },
+            "agent_reach_yt_dlp": {
+                "configured": True,
+                "tier": "free",
+                "cost_usd": 0.0,
+            },
+        },
+    })
+
+
+async def logo_endpoint(request: Request):
+    """Serve SocialRadar AI logo."""
+    dist_logo = os.path.join(WORKSPACE_ROOT, "web_ui", "dist", "logo.png")
+    if os.path.exists(dist_logo):
+        return FileResponse(dist_logo, media_type="image/png")
+    return FileResponse(os.path.join(STATIC_DIR, "logo.png"), media_type="image/png")
+
+
 # Starlette app configuration
 routes = [
     Route("/", endpoint=index, methods=["GET"]),
+    Route("/logo.png", endpoint=logo_endpoint, methods=["GET"]),
+    Route("/favicon.png", endpoint=logo_endpoint, methods=["GET"]),
+    Route("/favicon.ico", endpoint=logo_endpoint, methods=["GET"]),
     Route("/api/collect/platforms", endpoint=collect_platforms_endpoint, methods=["GET"]),
     Route("/api/collect/start", endpoint=collect_start_endpoint, methods=["POST"]),
     Route("/api/collect/{job_id}/status", endpoint=collect_status_endpoint, methods=["GET"]),
     Route("/api/collect/{job_id}/results", endpoint=collect_results_endpoint, methods=["GET"]),
     Route("/api/collect/{job_id}/export", endpoint=collect_export_endpoint, methods=["GET"]),
+    Route("/api/credit-guard/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
     Route("/api/assistant/message", endpoint=assistant_message_endpoint, methods=["POST"]),
     Route("/api/chat", endpoint=chat_endpoint, methods=["POST"]),
+    Route("/api/chat/export", endpoint=chat_export_endpoint, methods=["GET"]),
+    Route("/api/export/all", endpoint=chat_export_endpoint, methods=["GET"]),
     Route("/api/platforms/status", endpoint=platforms_status_endpoint, methods=["GET"]),
     Route("/api/platforms/connect", endpoint=platforms_connect_endpoint, methods=["POST"]),
     Route("/api/history", endpoint=history_endpoint, methods=["GET"]),

@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-SUPPORTED_PLATFORMS = ["instagram", "youtube", "reddit", "x"]
+SUPPORTED_PLATFORMS = ["instagram", "youtube", "reddit", "x", "linkedin"]
 
 # Stop reasons recorded per platform
 STOP_TARGET = "target_reached"
@@ -68,7 +68,7 @@ class CollectionLimits(BaseModel):
     max_posts: int = 30
     max_seconds: float = 600.0
     candidates_per_platform: int = 40
-    min_relevance: float = 0.5
+    min_relevance: float = 0.3
     # Instagram / Apify hard caps per query (protect credits). Env-driven on purpose: the chatbot
     # cannot raise them through a tool argument.
     apify_max_comments_per_query: int = Field(

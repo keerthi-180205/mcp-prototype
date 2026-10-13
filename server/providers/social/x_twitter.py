@@ -37,15 +37,14 @@ class XTwitterSocialProvider(SocialDataProvider):
 
     async def search_content(self, query: str, limit: int = 10, **kwargs: Any) -> List[NormalizedSocialRecord]:
         if not self.is_available():
-            logger.warning("twitter-cli / credentials not available, cannot search X")
+            logger.warning("twitter credentials/syndication not available, cannot search X")
             return []
-        raw = await self.collector._search(query, "top", max(1, min(limit, 100)))
+        from server.collection.models import QueryPlan
+        plan = QueryPlan(topic=query, keywords=[query])
+        candidates = await self.collector.discover(plan, limit=max(1, min(limit, 50)))
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         records: List[NormalizedSocialRecord] = []
-        for t in raw[:limit]:
-            cand = self.collector._candidate(t)
-            if cand is None:
-                continue
+        for cand in candidates[:limit]:
             records.append(
                 NormalizedSocialRecord(
                     record_id=f"x:{cand.post_id}",
@@ -54,13 +53,24 @@ class XTwitterSocialProvider(SocialDataProvider):
                     source_url=cand.url,
                     content_id=cand.post_id,
                     published_at=cand.published_at,
-                    author=SocialAuthor(username=cand.author_username, user_id=cand.author_id,
-                                        display_name=(t.get("author") or {}).get("name")),
-                    content=SocialContent(text=cand.text),
-                    engagement=SocialEngagement(likes=cand.like_count, comments=cand.comment_count,
-                                                views=cand.view_count),
-                    metadata=ProvenanceMetadata(source_platform="x", source_provider=self.provider_name,
-                                                backend_tool="twitter-cli", fetched_at=now, source_url=cand.url),
+                    author=SocialAuthor(
+                        username=cand.author_username or "x_user",
+                        user_id=cand.author_id or "x_user",
+                        display_name=cand.author_username or "X User",
+                    ),
+                    content=SocialContent(text=cand.text or cand.title),
+                    engagement=SocialEngagement(
+                        likes=cand.like_count or 0,
+                        comments=cand.comment_count or 0,
+                        views=cand.view_count or 0,
+                    ),
+                    metadata=ProvenanceMetadata(
+                        source_platform="x",
+                        source_provider=self.provider_name,
+                        backend_tool="twitter-search",
+                        fetched_at=now,
+                        source_url=cand.url,
+                    ),
                 )
             )
         return records

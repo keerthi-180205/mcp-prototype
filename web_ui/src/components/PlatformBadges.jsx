@@ -34,7 +34,8 @@ export default function PlatformBadges({ mode = 'sidebar' }) {
     youtube: { name: 'YouTube', color: '#ef4444' },
     reddit: { name: 'Reddit', color: '#f97316' },
     x: { name: 'X / Twitter', color: '#38bdf8' },
-    instagram: { name: 'Instagram', color: '#ec4899' }
+    instagram: { name: 'Instagram', color: '#ec4899' },
+    linkedin: { name: 'LinkedIn', color: '#0a66c2' }
   }
 
   if (mode === 'compact') {

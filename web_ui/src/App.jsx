@@ -1,15 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
-  MessageSquare,
-  SlidersHorizontal,
-  Plus,
+  SquarePen,
   PanelLeft,
   Trash2,
-  Sparkles
+  Sparkles,
+  ChevronDown,
+  Share2,
+  Compass,
+  SlidersHorizontal,
+  MessageSquare,
+  Search,
+  Check,
+  Zap,
+  Globe,
+  Settings as SettingsIcon
 } from 'lucide-react'
 import ChatInterface from './components/ChatInterface'
 import DiscoveryStudio from './components/DiscoveryStudio'
 import PlatformBadges from './components/PlatformBadges'
+import { SocialRadarLogo } from './components/SocialRadarLogo'
 import './index.css'
 
 const STORAGE_SESSIONS_LIST = 'mcp_sessions_list'
@@ -26,7 +35,10 @@ function createSessionObject(id, title) {
 function loadStoredSessions() {
   try {
     const raw = localStorage.getItem(STORAGE_SESSIONS_LIST)
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
   } catch (e) {
     console.warn('Failed to load sessions:', e)
   }
@@ -58,6 +70,13 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [sessions, setSessions] = useState(loadStoredSessions)
   const [activeSessionId, setActiveSessionId] = useState(() => getInitialActiveSession(sessions))
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('socialradar-ai')
+  const [searchFilter, setSearchFilter] = useState('')
+  const [showSearchInput, setShowSearchInput] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
+
+  const dropdownRef = useRef(null)
 
   useEffect(() => {
     try {
@@ -75,12 +94,23 @@ export default function App() {
     }
   }, [activeSessionId])
 
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setModelDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   const handleCreateNewChat = () => {
     const newId = generateSessionId()
     const newSession = createSessionObject(newId, 'New chat')
     setSessions(prev => [newSession, ...prev])
     setActiveSessionId(newId)
     setActiveTab('chat')
+    setSearchFilter('')
   }
 
   const handleSelectSession = (sid) => {
@@ -102,7 +132,6 @@ export default function App() {
         setActiveSessionId(remaining[0].id)
       }
     }
-    // Clean up stored messages for this session
     try {
       localStorage.removeItem(`mcp_msgs_${sid}`)
     } catch (err) {
@@ -116,109 +145,264 @@ export default function App() {
     )
   }
 
+  const handleShare = () => {
+    navigator.clipboard?.writeText(window.location.href)
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }
+
+  const models = [
+    {
+      id: 'socialradar-ai',
+      name: 'SocialRadar AI',
+      desc: 'Intelligent multi-platform audience intelligence powered by Gemini LLM & TrueScrape',
+      icon: <SocialRadarLogo size={18} />
+    },
+    {
+      id: 'truescrape',
+      name: 'TrueScrape Instagram',
+      desc: 'High-speed REST engine for Reels, posts & public comment acquisition',
+      icon: <Zap className="w-4 h-4 text-pink-400" />
+    },
+    {
+      id: 'agent-reach',
+      name: 'Agent Reach (yt-dlp)',
+      desc: 'Zero-API-key local scraper for YouTube videos & comments',
+      icon: <Globe className="w-4 h-4 text-red-400" />
+    }
+  ]
+
+  const currentModelObj = models.find(m => m.id === selectedModel) || models[0]
+
+  const filteredSessions = sessions.filter(s =>
+    !searchFilter ? true : s.title.toLowerCase().includes(searchFilter.toLowerCase())
+  )
+
   return (
-    <div className="llm-layout">
-      {/* Sidebar (ChatGPT & Claude Style) */}
-      <aside className={`llm-sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
-        <div className="llm-sidebar-header">
-          <button
-            onClick={handleCreateNewChat}
-            className="new-chat-btn"
-            title="Start a new collection conversation"
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Plus className="w-4 h-4" />
-              <span>New chat</span>
-            </div>
-            <Sparkles className="w-3.5 h-3.5" style={{ color: '#10a37f' }} />
-          </button>
-
-          {/* Navigation Switcher */}
-          <div className="sidebar-nav-tabs">
+    <div className="chatgpt-layout">
+      {/* ChatGPT Left Sidebar */}
+      <aside className={`chatgpt-sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+        <div className="sidebar-top">
+          {/* Top Bar with Logo & Collapse & New Chat */}
+          <div className="sidebar-header-row">
             <button
-              onClick={() => setActiveTab('chat')}
-              className={`sidebar-tab-btn ${activeTab === 'chat' ? 'active' : ''}`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Chat</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('discovery')}
-              className={`sidebar-tab-btn ${activeTab === 'discovery' ? 'active' : ''}`}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Discovery</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Chat History List */}
-        <div className="llm-sidebar-history">
-          <div className="history-section-title">Recent Chats</div>
-          {sessions.map(s => (
-            <div
-              key={s.id}
-              onClick={() => handleSelectSession(s.id)}
-              className={`history-item ${activeSessionId === s.id && activeTab === 'chat' ? 'active' : ''}`}
-            >
-              <span title={s.title}>{s.title}</span>
-              {sessions.length > 1 && (
-                <button
-                  onClick={(e) => handleDeleteSession(e, s.id)}
-                  className="icon-btn"
-                  title="Delete chat"
-                  style={{ padding: '2px', opacity: 0.6 }}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Sidebar Footer: Platform Statuses */}
-        <div className="llm-sidebar-footer">
-          <div className="platform-status-title">
-            <span>Platforms</span>
-            <span style={{ fontSize: '10px', color: '#10a37f', fontWeight: 600 }}>MCP Live</span>
-          </div>
-          <PlatformBadges mode="sidebar" />
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-        {/* Top Header Bar */}
-        <header className="llm-topbar">
-          <div className="topbar-left">
-            <button
-              onClick={() => setSidebarOpen(prev => !prev)}
-              className="icon-btn"
-              title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              onClick={() => setSidebarOpen(false)}
+              className="chatgpt-icon-btn"
+              title="Close sidebar"
             >
               <PanelLeft className="w-4 h-4" />
             </button>
-            <div className="topbar-title">
-              <span>Social Pulse MCP</span>
-              <span className="model-badge">Social Pulse v2</span>
+
+            <button
+              onClick={handleCreateNewChat}
+              className="chatgpt-new-chat-btn"
+              title="New chat"
+            >
+              <SquarePen className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Quick Actions / Navigation */}
+          <div className="sidebar-nav-list">
+            <button
+              onClick={handleCreateNewChat}
+              className={`sidebar-nav-item ${activeTab === 'chat' && sessions.find(s => s.id === activeSessionId)?.title === 'New chat' ? 'active' : ''}`}
+            >
+              <div className="nav-item-icon" style={{ display: 'flex', alignItems: 'center' }}>
+                <SocialRadarLogo size={18} />
+              </div>
+              <span className="nav-item-label" style={{ fontWeight: 600 }}>SocialRadar AI</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('discovery')}
+              className={`sidebar-nav-item ${activeTab === 'discovery' ? 'active' : ''}`}
+            >
+              <div className="nav-item-icon">
+                <Compass className="w-4 h-4 text-[#10a37f]" />
+              </div>
+              <span className="nav-item-label">Explore Studio</span>
+            </button>
+          </div>
+
+          {/* Search Chats Bar (if toggled or active) */}
+          {showSearchInput && (
+            <div className="sidebar-search-box">
+              <Search className="w-3.5 h-3.5 text-[#8e8e8e]" />
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={e => setSearchFilter(e.target.value)}
+                placeholder="Search chats..."
+                className="sidebar-search-input"
+                autoFocus
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Chat History List */}
+        <div className="chatgpt-history-container">
+          <div className="history-group-header">
+            <span>Recent</span>
+            <button
+              onClick={() => setShowSearchInput(prev => !prev)}
+              className="chatgpt-icon-btn small"
+              title="Search chats"
+            >
+              <Search className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="history-items-list">
+            {filteredSessions.map(s => {
+              const isActive = activeSessionId === s.id && activeTab === 'chat'
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => handleSelectSession(s.id)}
+                  className={`chatgpt-history-row ${isActive ? 'active' : ''}`}
+                >
+                  <span className="history-title" title={s.title}>
+                    {s.title}
+                  </span>
+                  {sessions.length > 1 && (
+                    <button
+                      onClick={(e) => handleDeleteSession(e, s.id)}
+                      className="history-action-btn"
+                      title="Delete chat"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Sidebar Footer: Profile & Connected Scrapers */}
+        <div className="chatgpt-sidebar-footer">
+          <div className="sidebar-platform-status">
+            <PlatformBadges mode="sidebar" />
+          </div>
+
+          <div className="chatgpt-user-row">
+            <div className="chatgpt-user-avatar">
+              <span>K</span>
+            </div>
+            <div className="chatgpt-user-info">
+              <span className="user-name">User Workspace</span>
+              <span className="user-plan">MCP TrueScrape Live</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main ChatGPT Body */}
+      <div className="chatgpt-main-view">
+        {/* Top Header Bar */}
+        <header className="chatgpt-topbar">
+          <div className="topbar-left-group">
+            {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="chatgpt-icon-btn"
+                title="Open sidebar"
+              >
+                <PanelLeft className="w-4 h-4" />
+              </button>
+            )}
+
+            {!sidebarOpen && (
+              <button
+                onClick={handleCreateNewChat}
+                className="chatgpt-icon-btn"
+                title="New chat"
+              >
+                <SquarePen className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Model Selector Dropdown */}
+            <div className="model-selector-wrapper" ref={dropdownRef}>
+              <button
+                onClick={() => setModelDropdownOpen(prev => !prev)}
+                className="chatgpt-model-btn"
+              >
+                <span className="model-name">{currentModelObj.name}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-[#8e8e8e]" />
+              </button>
+
+              {modelDropdownOpen && (
+                <div className="model-dropdown-menu">
+                  <div className="dropdown-title">Model Options</div>
+                  {models.map(m => (
+                    <div
+                      key={m.id}
+                      onClick={() => {
+                        setSelectedModel(m.id)
+                        setModelDropdownOpen(false)
+                      }}
+                      className={`dropdown-model-item ${selectedModel === m.id ? 'selected' : ''}`}
+                    >
+                      <div className="dropdown-item-header">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {m.icon}
+                          <span className="dropdown-item-title">{m.name}</span>
+                        </div>
+                        {selectedModel === m.id && (
+                          <Check className="w-4 h-4 text-[#10a37f]" />
+                        )}
+                      </div>
+                      <p className="dropdown-item-desc">{m.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="topbar-right-group">
             <PlatformBadges mode="compact" />
+
+            <button
+              onClick={handleShare}
+              className="chatgpt-share-btn"
+              title="Share chat"
+            >
+              {shareCopied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-[#10a37f]" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share</span>
+                </>
+              )}
+            </button>
+
+            <div className="chatgpt-top-avatar" title="User Account">
+              <span>K</span>
+            </div>
           </div>
         </header>
 
-        {/* View Body */}
-        {activeTab === 'chat' ? (
-          <ChatInterface
-            key={activeSessionId}
-            sessionId={activeSessionId}
-            onSessionTitleUpdate={handleSessionTitleUpdate}
-          />
-        ) : (
-          <DiscoveryStudio />
-        )}
+        {/* View Switcher: Chat Interface or Studio */}
+        <div className="chatgpt-content-stage">
+          {activeTab === 'chat' ? (
+            <ChatInterface
+              key={activeSessionId}
+              sessionId={activeSessionId}
+              onSessionTitleUpdate={handleSessionTitleUpdate}
+              selectedModelName={currentModelObj.name}
+            />
+          ) : (
+            <DiscoveryStudio />
+          )}
+        </div>
       </div>
     </div>
   )

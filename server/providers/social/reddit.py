@@ -39,15 +39,14 @@ class RedditSocialProvider(SocialDataProvider):
 
     async def search_content(self, query: str, limit: int = 10, **kwargs: Any) -> List[NormalizedSocialRecord]:
         if not self.is_available():
-            logger.warning("rdt-cli / REDDIT_SESSION not available, cannot search reddit")
+            logger.warning("Reddit collector not available, cannot search reddit")
             return []
-        raw = await self.collector._search([query, "-n", str(max(1, min(limit, 100))), "--sort", "relevance", "--time", "year"])
+        from server.collection.models import QueryPlan
+        plan = QueryPlan(topic=query, keywords=[query])
+        candidates = await self.collector.discover(plan, limit=max(1, min(limit, 50)))
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         records: List[NormalizedSocialRecord] = []
-        for d in raw[:limit]:
-            cand: Optional[PostCandidate] = self.collector._candidate(d)
-            if cand is None:
-                continue
+        for cand in candidates[:limit]:
             records.append(
                 NormalizedSocialRecord(
                     record_id=f"reddit:{cand.post_id}",
@@ -56,14 +55,20 @@ class RedditSocialProvider(SocialDataProvider):
                     source_url=cand.url,
                     content_id=cand.post_id,
                     published_at=cand.published_at,
-                    author=SocialAuthor(username=cand.author_username, user_id=cand.author_id,
-                                        display_name=cand.author_username),
+                    author=SocialAuthor(
+                        username=cand.author_username or "reddit_user",
+                        user_id=cand.author_id or "reddit_user",
+                        display_name=cand.author_username or "Reddit User",
+                    ),
                     content=SocialContent(title=cand.title, text=cand.text),
-                    engagement=SocialEngagement(likes=cand.like_count, comments=cand.comment_count),
+                    engagement=SocialEngagement(likes=cand.like_count or 0, comments=cand.comment_count or 0),
                     metadata=ProvenanceMetadata(
-                        source_platform="reddit", source_provider=self.provider_name, backend_tool="rdt-cli",
-                        fetched_at=now, source_url=cand.url,
-                        provider_metadata={"subreddit": cand.extra.get("subreddit") or ""},
+                        source_platform="reddit",
+                        source_provider=self.provider_name,
+                        backend_tool="reddit-collector",
+                        fetched_at=now,
+                        source_url=cand.url,
+                        provider_metadata={"subreddit": getattr(cand, "extra", {}).get("subreddit") if hasattr(cand, "extra") else ""},
                     ),
                 )
             )
@@ -76,7 +81,8 @@ class RedditSocialProvider(SocialDataProvider):
         if not self.is_available():
             return []
         pid = _post_id(content_url_or_id)
-        post = PostCandidate(platform="reddit", post_id=pid, url=f"{SITE}/comments/{pid}/")
+        post_url = content_url_or_id if content_url_or_id.startswith("http") else f"{SITE}/comments/{pid}/"
+        post = PostCandidate(platform="reddit", post_id=pid, url=post_url)
         try:
             rows = await self.collector.fetch_post_comments(post, limit)
         except Exception as exc:

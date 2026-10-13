@@ -21,6 +21,12 @@ def dedupe_key(row: CommentRow) -> Tuple[str, str, str]:
 def is_creator_comment(row: CommentRow, post: Optional[PostCandidate]) -> bool:
     if post is None:
         return False
+    # Never drop the post's own commentary/statement itself
+    if norm_text(row.comment) == norm_text(post.text):
+        return False
+    # If the platform is microblogging (X/Twitter or LinkedIn) where the post itself is a public commentary, retain it
+    if row.platform in ("x", "linkedin") and norm_text(row.comment) in norm_text(post.text):
+        return False
     author = norm_username(post.author_username)
     if author and norm_username(row.username) == author:
         return True

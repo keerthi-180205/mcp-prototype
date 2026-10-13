@@ -14,6 +14,7 @@ def _factories():
         ("instagram", "instagram", "InstagramCollector"),
         ("reddit", "reddit", "RedditCollector"),
         ("x", "x", "XCollector"),
+        ("linkedin", "linkedin", "LinkedInCollector"),
     ):
         try:
             mod = __import__(f"server.collection.collectors.{module}", fromlist=[cls])
@@ -24,7 +25,7 @@ def _factories():
 
 
 def normalize_platforms(platforms: Optional[List[str]]) -> List[str]:
-    aliases = {"twitter": "x", "yt": "youtube", "ig": "instagram"}
+    aliases = {"twitter": "x", "yt": "youtube", "ig": "instagram", "li": "linkedin"}
     if not platforms:
         return list(SUPPORTED_PLATFORMS)
     out: List[str] = []

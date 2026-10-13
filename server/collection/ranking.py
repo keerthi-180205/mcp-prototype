@@ -21,7 +21,17 @@ def relevance_score(topic: str, *texts: Optional[str]) -> float:
     if not toks:
         return 0.0
     hay_tokens = set(tokenize(haystack))
-    score = sum(1 for t in toks if t in hay_tokens) / len(toks)
+    matches = sum(1 for t in toks if t in hay_tokens)
+    score = matches / len(toks)
+
+    # If the user provides a compound or multi-word query (e.g. 'Mental Health Anxiety Stress'),
+    # matching 2 or more core concepts proves high relevance even if all 7 words aren't in 1 title.
+    if len(toks) >= 4 and matches >= 2:
+        score = max(score, min(0.9, (matches / 2.0) * 0.75))
+    elif len(toks) >= 3 and matches >= 2:
+        score = max(score, 0.75)
+    elif matches >= 1:
+        score = max(score, 0.4)
 
     # Hashtags squash words together ("#asiangames2026"): compare the squashed forms too.
     squashed = re.sub(r"[\W_]+", "", haystack)

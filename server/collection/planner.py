@@ -133,8 +133,13 @@ async def plan_query(topic: str, use_llm: bool = True, settings=None) -> QueryPl
     def _clean(vals, prefix_strip: str = "") -> List[str]:
         return [str(v).strip().lstrip(prefix_strip) for v in (vals or []) if str(v).strip()]
 
+    llm_tags = [h.replace(" ", "") for h in _clean(data.get("hashtags"), "#")]
+    combined_tags = [t for t in llm_tags if 3 <= len(t) <= 24] + [t for t in plan.hashtags if 3 <= len(t) <= 24]
+    if not combined_tags:
+        combined_tags = plan.hashtags
+
     plan.keywords = _dedupe(plan.keywords + _clean(data.get("keywords")), 7)
-    plan.hashtags = _dedupe(plan.hashtags + [h.replace(" ", "") for h in _clean(data.get("hashtags"), "#")], 6)
+    plan.hashtags = _dedupe(combined_tags, 6)
     plan.subreddits = _dedupe(plan.subreddits + [s.replace("r/", "") for s in _clean(data.get("subreddits"))], 7)
     plan.planner = "rules+gemini"
     return plan
