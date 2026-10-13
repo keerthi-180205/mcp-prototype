@@ -9,12 +9,13 @@ from server.providers.social.agent_reach_adapter import AgentReachAdapter
 from server.providers.social.base import SocialDataProvider
 from server.providers.social.github_social import GitHubSocialProvider
 from server.providers.social.instagram import InstagramSocialProvider
+from server.providers.social.truescrape_instagram import TrueScrapeInstagramSocialProvider
 from server.providers.social.stubs import (
     FacebookSocialProvider,
     LinkedInSocialProvider,
-    XTwitterSocialProvider,
 )
-from server.providers.social.reddit_opencli import RedditOpenCLIProvider
+from server.providers.social.x_twitter import XTwitterSocialProvider
+from server.providers.social.reddit import RedditSocialProvider
 from server.providers.social.web_rss import WebRSSSocialProvider
 from server.providers.social.youtube import YouTubeSocialProvider
 
@@ -34,8 +35,9 @@ class SocialProviderRegistry:
 
     def _initialize_default_providers(self) -> None:
         """Register default provider instances for supported platforms."""
-        # Instagram: Primary Apify
-        self.register_provider(InstagramSocialProvider())
+        # Instagram: Primary TrueScrape (REST API), Secondary Apify (Actor fallback)
+        self.register_provider(TrueScrapeInstagramSocialProvider(), is_primary=True)
+        self.register_provider(InstagramSocialProvider(), is_primary=False)
 
         # YouTube: Primary Agent Reach (yt-dlp)
         self.register_provider(YouTubeSocialProvider(adapter=self.agent_reach))
@@ -47,7 +49,7 @@ class SocialProviderRegistry:
         self.register_provider(WebRSSSocialProvider(adapter=self.agent_reach))
 
         # Stubs / Configurable:
-        self.register_provider(RedditOpenCLIProvider())
+        self.register_provider(RedditSocialProvider())
         self.register_provider(XTwitterSocialProvider())
         self.register_provider(LinkedInSocialProvider())
         self.register_provider(FacebookSocialProvider())

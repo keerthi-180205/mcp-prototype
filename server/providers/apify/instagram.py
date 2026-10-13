@@ -86,3 +86,56 @@ class ApifyInstagramProvider:
             run_input=run_input,
         )
         return items
+
+    async def search_hashtags(
+        self,
+        hashtags: List[str],
+        results_per_tag: int,
+        max_items: Optional[int] = None,
+        max_total_charge_usd: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        """Discover recent posts for several hashtags in ONE Actor run (cheaper than one run per tag)."""
+        urls = []
+        for tag in hashtags:
+            clean = tag.lstrip("#").replace(" ", "").lower()
+            if clean:
+                urls.append(f"https://www.instagram.com/explore/tags/{clean}/")
+        if not urls:
+            return []
+        run_input: Dict[str, Any] = {
+            "directUrls": urls,
+            "resultsType": "posts",
+            "resultsLimit": max(1, int(results_per_tag)),
+        }
+        logger.info("[APIFY_INSTAGRAM] Hashtag discovery tags=%d limit/tag=%d", len(urls), results_per_tag)
+        return await self.client.run_actor_sync_get_dataset(
+            actor_id=self.search_actor,
+            run_input=run_input,
+            max_items=max_items,
+            max_total_charge_usd=max_total_charge_usd,
+        )
+
+    async def get_comments_batch(
+        self,
+        post_urls: List[str],
+        comments_per_post: int,
+        max_items: Optional[int] = None,
+        max_total_charge_usd: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        """Fetch comments for MANY posts in ONE Actor run (each run has a fixed cost)."""
+        if not post_urls:
+            return []
+        run_input: Dict[str, Any] = {
+            "directUrls": list(post_urls),
+            "resultsLimit": max(1, int(comments_per_post)),
+        }
+        logger.info(
+            "[APIFY_INSTAGRAM] Comment batch posts=%d limit/post=%d max_items=%s",
+            len(post_urls), comments_per_post, max_items,
+        )
+        return await self.client.run_actor_sync_get_dataset(
+            actor_id=self.comments_actor,
+            run_input=run_input,
+            max_items=max_items,
+            max_total_charge_usd=max_total_charge_usd,
+        )

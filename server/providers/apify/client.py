@@ -108,6 +108,8 @@ class ApifyClient:
         actor_id: str,
         run_input: Dict[str, Any],
         timeout_secs: Optional[float] = None,
+        max_items: Optional[int] = None,
+        max_total_charge_usd: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
         """Run an Apify Actor synchronously and return resulting dataset items.
 
@@ -117,6 +119,8 @@ class ApifyClient:
             actor_id: Full Actor identifier (e.g. 'apify/instagram-scraper' or 'apify~instagram-scraper').
             run_input: Dictionary payload passed as input to the Actor.
             timeout_secs: Max execution timeout in seconds. Defaults to client timeout.
+            max_items: Hard cap on dataset items returned/charged (Apify 'maxItems'). Off by default.
+            max_total_charge_usd: Hard cap on spend for this run (Apify 'maxTotalChargeUsd'). Off by default.
 
         Returns:
             List of dataset items (dictionaries).
@@ -144,6 +148,10 @@ class ApifyClient:
             "format": "json",
             "clean": 1,
         }
+        if max_items is not None:
+            params["maxItems"] = max(1, int(max_items))
+        if max_total_charge_usd is not None:
+            params["maxTotalChargeUsd"] = max(0.01, float(max_total_charge_usd))
 
         async def _make_call() -> httpx.Response:
             if self._client:

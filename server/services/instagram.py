@@ -22,6 +22,7 @@ from server.models import (
     InstagramTopicResearchResult,
 )
 from server.providers.apify.instagram import ApifyInstagramProvider
+from server.providers.truescrape.instagram import TrueScrapeInstagramProvider
 
 logger = get_logger(__name__)
 
@@ -147,16 +148,19 @@ def normalize_post_data(raw_item: Dict[str, Any]) -> InstagramPost:
         raw_item.get("ownerId")
         or owner_data.get("id")
         or raw_item.get("userId")
+        or raw_item.get("authorId")
     )
     author_username = (
         raw_item.get("ownerUsername")
         or owner_data.get("username")
         or raw_item.get("username")
+        or raw_item.get("authorHandle")
     )
     author_name = (
         raw_item.get("ownerFullName")
         or owner_data.get("full_name")
         or owner_data.get("name")
+        or raw_item.get("authorName")
     )
 
     author = None
@@ -182,11 +186,13 @@ def normalize_post_data(raw_item: Dict[str, Any]) -> InstagramPost:
         raw_item.get("likesCount")
         or raw_item.get("likes")
         or raw_item.get("like_count")
+        or raw_item.get("likeCount")
     )
     comment_count = _safe_int(
         raw_item.get("commentsCount")
         or raw_item.get("comments")
         or raw_item.get("comment_count")
+        or raw_item.get("commentCount")
     )
     view_count = _safe_int(
         raw_item.get("videoViews")
@@ -194,6 +200,7 @@ def normalize_post_data(raw_item: Dict[str, Any]) -> InstagramPost:
         or raw_item.get("viewsCount")
         or raw_item.get("view_count")
         or raw_item.get("plays")
+        or raw_item.get("viewCount")
     )
 
     return InstagramPost(
@@ -228,7 +235,7 @@ def normalize_comment_data(raw_item: Dict[str, Any]) -> InstagramComment:
         comment_id = str(comment_id)
 
     # User / Commenter metadata
-    user_dict = raw_item.get("user") or raw_item.get("owner") or {}
+    user_dict = raw_item.get("user") or raw_item.get("owner") or raw_item.get("author") or {}
     if not isinstance(user_dict, dict):
         user_dict = {}
 
@@ -236,16 +243,19 @@ def normalize_comment_data(raw_item: Dict[str, Any]) -> InstagramComment:
         user_dict.get("id")
         or raw_item.get("ownerId")
         or raw_item.get("userId")
+        or raw_item.get("authorId")
     )
     u_username = (
         user_dict.get("username")
         or raw_item.get("ownerUsername")
         or raw_item.get("username")
+        or raw_item.get("authorHandle")
     )
     u_name = (
         user_dict.get("full_name")
         or user_dict.get("name")
         or raw_item.get("ownerFullName")
+        or raw_item.get("authorName")
     )
     is_verified = bool(
         user_dict.get("is_verified")
@@ -263,6 +273,7 @@ def normalize_comment_data(raw_item: Dict[str, Any]) -> InstagramComment:
         user_dict.get("profile_pic_url")
         or raw_item.get("ownerProfilePicUrl")
         or raw_item.get("profilePicUrl")
+        or raw_item.get("authorAvatarUrl")
     )
 
     user = None
@@ -321,9 +332,21 @@ class InstagramService:
 
     def __init__(
         self,
-        provider: Optional[ApifyInstagramProvider] = None,
+        provider: Optional[Any] = None,
+        truescrape_provider: Optional[TrueScrapeInstagramProvider] = None,
     ) -> None:
-        self.provider = provider or ApifyInstagramProvider()
+        self.truescrape_provider = truescrape_provider or TrueScrapeInstagramProvider()
+        self.apify_provider = provider if isinstance(provider, ApifyInstagramProvider) else ApifyInstagramProvider()
+        
+        # Select active primary provider: TrueScrape if available, otherwise Apify
+        if provider is not None:
+            self.provider = provider
+        elif self.truescrape_provider.is_available():
+            self.provider = self.truescrape_provider
+            logger.info("[INSTAGRAM_SERVICE] Active primary provider: TrueScrape (REST API)")
+        else:
+            self.provider = self.apify_provider
+            logger.info("[INSTAGRAM_SERVICE] Active primary provider: Apify (Actor fallback)")
 
     async def search_posts_or_reels(
         self,
@@ -350,10 +373,24 @@ class InstagramService:
 
         safe_limit = max(1, min(max_results, 50))
         clean_query = query.strip()
-        raw_items = await self.provider.search_posts_or_reels(
-            query=clean_query,
-            max_results=safe_limit,
-        )
+        raw_items = []
+        try:
+            raw_items = await self.provider.search_posts_or_reels(
+                query=clean_query,
+                max_results=safe_limit,
+            )
+        except Exception as e:
+            logger.warning("[INSTAGRAM_SERVICE] Primary provider search failed: %s", e)
+
+        if not raw_items and self.provider != self.apify_provider and self.apify_provider.is_available():
+            logger.info("[INSTAGRAM_SERVICE] Falling back to Apify provider for %r", clean_query)
+            try:
+                raw_items = await self.apify_provider.search_posts_or_reels(
+                    query=clean_query,
+                    max_results=safe_limit,
+                )
+            except Exception as e:
+                logger.warning("[INSTAGRAM_SERVICE] Apify fallback search failed: %s", e)
 
         results: List[InstagramPost] = []
         for raw in raw_items:

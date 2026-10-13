@@ -1,50 +1,117 @@
-# Virtual environments
+# ==============================================================================
+# Git Ignore Configuration for MCP Social Intelligence & Web UI Project
+# ==============================================================================
+
+# Virtual Environments
 .venv/
 venv/
 env/
 ENV/
+env.bak/
+venv.bak/
+*.venv/
 
-# Python bytecode & cache
+# Python Bytecode & Cache
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
-.coverage
-htmlcov/
-*.egg-info/
+*.so
+.Python
+
+# Python Packaging & Distribution Builds
+build/
+develop-eggs/
 dist/
 **/dist/
-build/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+*.egg
+MANIFEST
+.installed.cfg
 
-# Sensitive environment credentials & secrets
+# Python Testing, Linters & Coverage
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.dmypy.json
+dmypy.json
+
+# Environment Variables, Secrets & Sensitive Credentials
 .env
 .env.*
 !.env.example
+!.env.template
 *.pem
 *.key
 *.cert
+*.crt
+*.pfx
+*.p12
+credentials.json
+client_secret*.json
+token.json
+service_account*.json
+secrets/
 
-# Browser sessions & cookies (Zero-token / session safety)
+# Web Scraping Sessions, Auth Tokens & Browser Storage
 *.session
 *.cookie
 *.cookies
 cookies.txt
 sessions/
 auth_tokens/
+browser_data/
+.playwright/
+playwright-report/
+test-results/
 
-# Local databases & storage
-data/*.db
-data/*.sqlite*
+# Local Databases, Scraped Data & Exports
+data/*
+!data/.gitkeep
+!data/exports/
+data/exports/*
+!data/exports/.gitkeep
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
+*.sqlite3-journal
+*.rdb
+/dumps/
+/exports/
 
-# Logs & debugging
+# Logs & Debugging
 *.log
+*.log.*
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# Node & frontend dependencies and builds
+# Node / Frontend Dependencies & Builds
 node_modules/
 **/node_modules/
 .npm/
@@ -52,19 +119,48 @@ node_modules/
 **/.vite/
 dist-ssr/
 *.local
+.eslintcache
+.stylelintcache
+.oxlint_cache/
 
-# Temporary scratch & root test scripts
+# Scratch, Temporary & Ad-hoc Root Test Scripts
 /test_*.py
 scripts/test_browser_*.py
-/scratch/
-/tmp/
-/temp/
+scratch/
+**/scratch/
+tmp/
+**/tmp/
+temp/
+**/temp/
+*.tmp
+*.temp
+*.bak
 
-# Operating system & IDE files
+# Operating System Artifacts
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+
+# IDEs & Code Editors
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+
+# AI Coding Assistants & Agent Local Metadata
+.agents/
+.cursor/
+.windsurf/
+
+# Docker Local Overrides
+docker-compose.override.yml

@@ -76,8 +76,41 @@ class Settings:
         default_factory=lambda: float(os.getenv("GEMINI_TIMEOUT", "90.0"))
     )
 
+    # TrueScrape API Configuration
+    truescrape_api_key: Optional[str] = field(default_factory=lambda: os.getenv("TRUESCRAPE_API_KEY") or None)
+    truescrape_api_base_url: str = field(
+        default_factory=lambda: os.getenv("TRUESCRAPE_API_BASE_URL", "https://api.truescrape.com").rstrip("/")
+    )
+    truescrape_timeout: float = field(
+        default_factory=lambda: float(os.getenv("TRUESCRAPE_TIMEOUT", "30.0"))
+    )
+
+    # SocialCrawl API Configuration (Multi-platform social data)
+    socialcrawl_api_key: Optional[str] = field(default_factory=lambda: os.getenv("SOCIALCRAWL_API_KEY") or None)
+    socialcrawl_base_url: str = field(
+        default_factory=lambda: os.getenv("SOCIALCRAWL_BASE_URL", "https://www.socialcrawl.dev").rstrip("/")
+    )
+    socialcrawl_timeout: float = field(
+        default_factory=lambda: float(os.getenv("SOCIALCRAWL_TIMEOUT", "30.0"))
+    )
+
+    # Bright Data API Configuration (Enterprise Web Scraper & Unlocker)
+    brightdata_api_key: Optional[str] = field(default_factory=lambda: os.getenv("BRIGHTDATA_API_KEY") or None)
+    brightdata_base_url: str = field(
+        default_factory=lambda: os.getenv("BRIGHTDATA_BASE_URL", "https://api.brightdata.com").rstrip("/")
+    )
+    brightdata_timeout: float = field(
+        default_factory=lambda: float(os.getenv("BRIGHTDATA_TIMEOUT", "30.0"))
+    )
+
     # Apify API Configuration
-    apify_api_token: Optional[str] = field(default_factory=lambda: os.getenv("APIFY_API_TOKEN") or None)
+    apify_api_token: Optional[str] = field(
+        default_factory=lambda: (
+            (os.getenv("APIFY_API_TOKEN") or "").split("token=")[-1].split("&")[0].strip()
+            if "token=" in (os.getenv("APIFY_API_TOKEN") or "")
+            else (os.getenv("APIFY_API_TOKEN") or None)
+        )
+    )
     apify_api_base_url: str = field(
         default_factory=lambda: os.getenv("APIFY_API_BASE_URL", "https://api.apify.com/v2").rstrip("/")
     )
@@ -150,6 +183,9 @@ class Settings:
             f"gemini_api_key={_mask_secret(self.gemini_api_key)!r}, "
             f"gemini_model={self.gemini_model!r}, "
             f"gemini_timeout={self.gemini_timeout}, "
+            f"truescrape_api_key={_mask_secret(self.truescrape_api_key)!r}, "
+            f"socialcrawl_api_key={_mask_secret(self.socialcrawl_api_key)!r}, "
+            f"brightdata_api_key={_mask_secret(self.brightdata_api_key)!r}, "
             f"apify_api_token={_mask_secret(self.apify_api_token)!r}, "
             f"apify_api_base_url={self.apify_api_base_url!r}, "
             f"apify_instagram_search_actor={self.apify_instagram_search_actor!r}, "

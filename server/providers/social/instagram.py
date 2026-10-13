@@ -170,6 +170,23 @@ class InstagramSocialProvider(SocialDataProvider):
     ) -> Optional[SocialAuthor]:
         """Fetch public profile metadata."""
         username = identifier.replace("@", "").strip().strip("/")
+        if hasattr(self.service.provider, "get_profile"):
+            try:
+                prof = await self.service.provider.get_profile(username)
+                if prof:
+                    return SocialAuthor(
+                        user_id=prof.get("id"),
+                        username=prof.get("username") or username,
+                        display_name=prof.get("display_name"),
+                        bio=prof.get("bio"),
+                        profile_url=f"https://www.instagram.com/{username}/",
+                        profile_pic_url=prof.get("profile_picture_url"),
+                        followers=prof.get("followers_count"),
+                        following=prof.get("following_count"),
+                        is_verified=prof.get("is_verified", False),
+                    )
+            except Exception as e:
+                logger.warning("Error fetching profile from provider for %s: %s", username, e)
         return SocialAuthor(
             username=username,
             profile_url=f"https://www.instagram.com/{username}/",
