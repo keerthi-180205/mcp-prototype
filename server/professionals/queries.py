@@ -23,10 +23,18 @@ CITY_ALIASES: Dict[str, Tuple[str, ...]] = {
 
 # Marketplaces and directories: their contact details belong to the platform, not to a clinician,
 # and scraping a competitor's roster is not what this tool is for.
+# Contact-data brokers sell scraped emails and phone numbers of people who never gave them out: never a source.
+BROKER_HOSTS = (
+    "rocketreach.", "zoominfo.", "aeroleads.", "lusha.", "apollo.io", "signalhire.", "contactout.", "hunter.io", "snov.io",
+    "theorg.", "crunchbase.", "leadiq.", "clearbit.", "uplead.", "seamless.ai", "adapt.io", "datanyze.", "kaspr.", "salesql.",
+    "peoplelooker.", "spokeo.", "whitepages.", "radaris.", "mylife.", "ai-ark.", "wiza.co", "getprospect.", "skrapp.",
+)
 DIRECTORY_HOSTS = (
     "practo.", "justdial.", "lybrate.", "sulekha.", "credihealth.", "apollo247.", "1mg.", "docprime.",
     "psychologytoday.", "betterhelp.", "talkspace.", "mindtalk.", "therapyroute.", "yourdost.", "innerhour.",
-    "zocdoc.", "wellnessforum",
+    "zocdoc.", "wellnessforum", "medipract.", "healthgrades.", "doximity.", "drlogy.", "docindia.", "medindia.", "mfine.", "curofy.",
+    "medibuddy.", "tatahealth.", "kivihealth.", "amahahealth.", "manastha.", "wysa.", "healthtap.", "catexhealth.", "nectarplus.",
+    "rockethealth.", "unifers.", "bajajfinservhealth.", "eka.care", "ijneronline.",
 )
 # Social networks, reference sites and media: never a practice website.
 NON_PRACTICE_HOSTS = (
@@ -49,7 +57,7 @@ class Query:
 
 def is_directory(host: str) -> bool:
     host = host.lower()
-    return any(h in host for h in DIRECTORY_HOSTS)
+    return any(h in host for h in DIRECTORY_HOSTS) or any(h in host for h in BROKER_HOSTS)
 
 
 def is_non_practice(host: str) -> bool:

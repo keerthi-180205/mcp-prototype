@@ -4,6 +4,7 @@
   run      search, classify, read bios and websites, save everything as "new" for review
   list     the review queue (best first)           show     one person with every channel and its source
   review   approve | reject | dnc (do not contact) | new       licence   record your register check
+  enrich   find each individual's own website from their name and read its contact page (1 search credit each)
   suppress add an email / phone / domain / profile URL to the do-not-contact list
   export   CSV / JSON of APPROVED people only (do-not-contact and suppressed people are never exported)
 
@@ -30,6 +31,7 @@ load_dotenv(os.path.join(ROOT, ".env"))
 
 from pydantic import ValidationError  # noqa: E402
 
+from server.professionals.enrich import audit_enrichments, enrich_professionals  # noqa: E402
 from server.professionals.export import export_professionals  # noqa: E402
 from server.professionals.finder import ProfessionalFinder  # noqa: E402
 from server.professionals.models import DEFAULT_SPECIALTIES, REVIEW_STATUSES, FinderParams  # noqa: E402
@@ -158,6 +160,26 @@ def cmd_licence(args: argparse.Namespace) -> int:
     return 0
 
 
+async def cmd_enrich(args: argparse.Namespace) -> int:
+    if args.audit:
+        res = audit_enrichments(args.db)
+        print(f"checked {res['checked']} name-search websites against the current rules; undid {res['reset']} (they will be searched again by the next `enrich` run)")
+        return 0
+    res = await enrich_professionals(db_path=args.db, limit=args.limit, max_credits=args.max_credits, force=args.force,
+                                     on_progress=lambda m: print(f"  ... {m}", flush=True))
+    st = res["stats"]
+    print(f"searched {st.get('searched', 0)} people ({st.get('search_credits', 0)} search credits): website found for {st.get('found', 0)} "
+          f"({st.get('found_direct_channel', 0)} with an email / phone / form, {st.get('found_no_channel', 0)} without), no confident match for {st.get('no_match', 0)}")
+    skipped = {k[8:]: v for k, v in st.items() if k.startswith("skipped_")}
+    if skipped:
+        print("skipped: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in skipped.items()))
+    print("sites: " + (", ".join(f"{k[5:]}={v}" for k, v in sorted(st.items()) if k.startswith("site_")) or "none opened"))
+    for n in res["notes"]:
+        print(f"  note: {n}")
+    print("Each website is a best guess from the name: open it and confirm it is the same person before approving.")
+    return 0
+
+
 def cmd_suppress(args: argparse.Namespace) -> int:
     try:
         norm = store.add_suppression(args.kind, args.value, args.reason or "", args.db)
@@ -222,6 +244,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("kind", choices=list(store.SUPPRESSION_KINDS))
     sp.add_argument("value")
     sp.add_argument("--reason")
+    en = sub.add_parser("enrich", help="find individuals' own websites from their names")
+    en.add_argument("--limit", type=int, default=10, help="people to look up (best-ranked first)")
+    en.add_argument("--max-credits", type=int, default=15, help="hard cap on search credits")
+    en.add_argument("--force", action="store_true", help="search again for people already tried")
+    en.add_argument("--audit", action="store_true", help="spend nothing: undo stored websites the current rules would not accept")
     ex = sub.add_parser("export", help="CSV / JSON of approved people")
     ex.add_argument("--status", default="approved", choices=list(REVIEW_STATUSES))
     ex.add_argument("--format", default="csv", choices=["csv", "json"])
@@ -231,7 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     handlers = {"plan": cmd_plan, "run": cmd_run, "list": cmd_list, "show": cmd_show, "review": cmd_review,
-                "licence": cmd_licence, "suppress": cmd_suppress, "export": cmd_export}
+                "licence": cmd_licence, "suppress": cmd_suppress, "export": cmd_export, "enrich": cmd_enrich}
     fn = handlers[args.cmd]
     try:
         return asyncio.run(fn(args)) if asyncio.iscoroutinefunction(fn) else fn(args)

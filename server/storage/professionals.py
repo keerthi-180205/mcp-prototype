@@ -99,6 +99,12 @@ def init_tables(db_path: Optional[str] = None) -> None:
                     UNIQUE(pro_id, kind, value)
                 );
                 CREATE INDEX IF NOT EXISTS idx_pro_channels ON pro_channels(pro_id, kind);
+                CREATE TABLE IF NOT EXISTS pro_enrich_log (
+                    pro_id TEXT PRIMARY KEY,
+                    attempted_at TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    detail TEXT NOT NULL DEFAULT ''
+                );
                 CREATE TABLE IF NOT EXISTS pro_suppression (
                     kind TEXT NOT NULL,
                     value TEXT NOT NULL,
@@ -351,6 +357,46 @@ def counts_by_status(db_path: Optional[str] = None) -> Dict[str, int]:
     conn = _conn(db_path)
     try:
         return {r["review_status"]: r["n"] for r in conn.execute("SELECT review_status, COUNT(*) AS n FROM professionals GROUP BY review_status")}
+    finally:
+        conn.close()
+
+
+# ---- website-search attempts ------------------------------------------------------------------------------------
+def last_enrich_attempt(pro_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, str]]:
+    conn = _conn(db_path)
+    try:
+        row = conn.execute("SELECT attempted_at, outcome, detail FROM pro_enrich_log WHERE pro_id=?", (pro_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def log_enrich_attempt(pro_id: str, outcome: str, detail: str = "", db_path: Optional[str] = None) -> None:
+    conn = _conn(db_path)
+    try:
+        with conn:
+            conn.execute("INSERT OR REPLACE INTO pro_enrich_log (pro_id, attempted_at, outcome, detail) VALUES (?,?,?,?)",
+                         (pro_id, now_iso(), outcome, detail[:200]))
+    finally:
+        conn.close()
+
+
+def reset_enrichment(pro_id: str, note: str, db_path: Optional[str] = None) -> None:
+    """Undo a name-search website: its channels, the website link, the review note and the attempt record."""
+    pro = get_professional(pro_id, db_path)
+    if pro is None or not pro["website_url"]:
+        return
+    host = pro["website_url"].split("//", 1)[-1].split("/", 1)[0].lower().removeprefix("www.")
+    conn = _conn(db_path)
+    try:
+        with conn:
+            for ch in pro["channels"]:
+                src = (ch["source_url"] or "").split("//", 1)[-1].split("/", 1)[0].lower().removeprefix("www.")
+                if ch["found_via"] == "name_search" or (src == host and ch["found_via"] != "serp"):
+                    conn.execute("DELETE FROM pro_channels WHERE pro_id=? AND kind=? AND value=?", (pro_id, ch["kind"], ch["value"]))
+            reason = "; ".join(x for x in pro["needs_review_reason"].split("; ") if x and x != note)
+            conn.execute("UPDATE professionals SET website_url=NULL, needs_review_reason=? WHERE pro_id=?", (reason, pro_id))
+            conn.execute("DELETE FROM pro_enrich_log WHERE pro_id=?", (pro_id,))
     finally:
         conn.close()
 

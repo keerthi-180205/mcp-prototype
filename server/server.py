@@ -1270,6 +1270,7 @@ def export_collection_results(job_id: str, format: str = "csv") -> Dict[str, Any
 # Therapist / psychiatrist finder: search -> human review -> approved export
 # ---------------------------------------------------------------------------
 from server.professionals import api as _pro_api  # noqa: E402
+from server.professionals.enrich import enrich_professionals as _enrich_professionals  # noqa: E402
 from server.professionals.export import export_professionals as _export_professionals  # noqa: E402
 from server.professionals.models import DEFAULT_SPECIALTIES as _DEFAULT_SPECIALTIES, FinderParams as _FinderParams  # noqa: E402
 from server.professionals.queries import build_queries as _build_queries, estimate as _estimate  # noqa: E402
@@ -1358,6 +1359,20 @@ def review_professional(pro_id: str, decision: str, note: str = "") -> Dict[str,
     except ValueError as exc:
         return {"status": "error", "message": str(exc)}
     return item or {"status": "error", "message": f"unknown pro_id: {pro_id}"}
+
+
+@mcp.tool()
+async def enrich_professionals(limit: int = 10, max_search_credits: int = 15) -> Dict[str, Any]:
+    """Find individual clinicians' own websites from their names and read the contact page (best-ranked first).
+
+    LinkedIn profiles carry no contact details, so this is how an individual gets an email / phone / contact form.
+    One search credit per person. Every website is a best guess from the name: each record is flagged so a person
+    confirms it is the same individual before approving. Nobody is contacted.
+    """
+    try:
+        return {"status": "ok", **(await _enrich_professionals(limit=max(1, min(int(limit), 40)), max_credits=max(1, min(int(max_search_credits), 60))))}
+    except Exception as exc:  # surface provider problems as a message, not a crash
+        return {"status": "error", "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
 
 
 @mcp.tool()
