@@ -414,6 +414,8 @@ python scripts/find_professionals.py plan --city Bangalore                  # qu
 python scripts/find_professionals.py run  --city Bangalore                  # search, classify, read bios and sites
 python scripts/find_professionals.py list --has-channel any                 # review queue, best first ( ! = look closer )
 python scripts/find_professionals.py show 3fa9c1                            # every channel and the page it was found on
+python scripts/find_professionals.py enrich --limit 10 --max-credits 15     # each individual's own website, from their name
+python scripts/find_professionals.py enrich --audit                         # undo stored websites the current rules would reject
 python scripts/find_professionals.py review 3fa9c1 approve --note "RCI register checked"   # approve | reject | dnc | new
 python scripts/find_professionals.py licence 3fa9c1 verified                # record YOUR check in the official register
 python scripts/find_professionals.py export                                 # CSV of APPROVED people only
@@ -433,19 +435,89 @@ python scripts/find_professionals.py export                                 # CS
   respect; shared mail providers (gmail.com ...) can never be suppressed by domain.
 * Cost control: `--max-credits` (search), `--max-profiles` (Instagram bios), `--max-sites`; repeated searches and bios
   are cached. One run at a time.
+* `enrich` looks for an individual's own website by name (1 search credit each, hard `--max-credits` stop). A result counts
+  only if every name part and a psychology term appear in its title / snippet **and** the host is a personal domain or a
+  hospital / clinic site. Contact-data brokers (RocketReach, ZoomInfo ...), directories, health apps and journals are never
+  accepted: their phone numbers and emails are not the clinician's own. Lines found on a shared hospital page are stored as
+  generic. Every match carries the note "confirm it is this person" and still goes through review.
 
 **REST** (`/api/professionals*`; set `PROFESSIONALS_API_TOKEN` to require `Authorization: Bearer <token>`)
 `POST /runs` start - `GET /runs/{id}` status - `GET /` review queue (filters: status, role, entity_type, city, has_channel,
 needs_review, q, sort) - `GET /{id}` detail - `POST /{id}/review` - `POST /suppress` - `GET /export?status=approved&format=csv`.
 **MCP tools:** `find_professionals` (`dry_run` shows the plan), `get_professionals_run`, `list_professionals`,
-`review_professional`, `export_professionals`.
+`review_professional`, `enrich_professionals`, `export_professionals`.
 
 **First live run (Bangalore, 2 specialties, about 6 search credits, 24-125 s):** 39 candidates -> 32 kept = 19 individual
 clinicians from LinkedIn (9 clinical psychologists, 10 psychiatrists) + 13 organisations. LinkedIn profiles carry no contact
 details (they stay behind a login), so for individuals the channel is their profile; email / phone / contact-form channels
 came from clinic and hospital sites (10 of 32 records). Known limits: the same person found on LinkedIn and Instagram is two
-records (merged only when an Instagram bio links to a site that was also found separately); finding an individual's own
-website from their name is not built yet.
+records (merged only when an Instagram bio links to a site that was also found separately).
+
+**Name -> website (`enrich`), first live run:** the first version accepted any page that matched a name; of 17 "matches"
+16 were data brokers, directories or health apps, so the host rules above were added and `enrich --audit` undid those 16.
+With the strict rules, 4 of 26 individuals have their own site or a clinic page with published contact lines; the rest
+stay profile-only, which is the honest result: most clinicians publish no direct contact on a page that Google ties to
+their name.
+
+## Our Own Audience: Comments on MMTF's Posts and the Care Queue
+
+Reads the comments on **MMTF's own** Instagram posts and YouTube videos, labels each one with transparent rules, and turns
+the ones that look like a call for help into a **reply queue for people**. It exists so nobody who writes "please help" or
+"I want to die" under our post goes unanswered, and so the team can see who engages with its content.
+
+```
+MMTF_OWN_ACCOUNTS (the only accounts it will touch) -> list the account's recent posts -> each post's owner is verified
+  -> comments (TrueScrape ~1 credit per 15, or yt-dlp for free) -> rules label every comment -> SQLite
+  -> care queue: crisis > seeking_help > distress, oldest first, each with a reply DRAFT -> a person replies publicly -> marks it done
+```
+
+```bash
+# .env:  MMTF_OWN_ACCOUNTS="instagram:<our_handle>; youtube:@<our_channel>"     (nothing else can be collected)
+python scripts/audience.py accounts
+python scripts/audience.py collect --platform instagram --posts 10 --comments 500 --max-credits 60
+python scripts/audience.py queue                                    # who needs a person, most urgent first, with a draft reply
+python scripts/audience.py handle 3fa9c1 replied --by Asha --note "public reply posted"
+python scripts/audience.py export                                   # CSV: username, comment, label (personal data)
+python scripts/audience.py stats | purge --days 90 | forget --platform instagram --username someone
+```
+
+**Labels** (they describe the *comment*, never the person): `crisis` (wants to die / harm themselves, English, Hinglish,
+Hindi), `seeking_help` (asks for help or a professional), `distress` (a first-person statement of suffering), then `question`,
+`positive`, `spam`, `other`. Only the first three enter the queue. Urgent labels favour recall: a false alarm costs a reviewer
+seconds, a miss costs more. Every flag keeps the phrase that caused it. `possible_minor` (an age under 18, a school class, board
+exams) is a cue to reply more carefully, never a conclusion. General talk about suicide ("rates are rising") still gets a
+look, at the lowest priority.
+
+**Rules it keeps**
+* **Only our accounts.** The account must be in `MMTF_OWN_ACCOUNTS`; a typo in that value raises instead of weakening the
+  guard. Instagram grids can show collab / tagged posts owned by someone else, so a post is kept only if its reported owner
+  is the account (an unknown owner is dropped, never assumed); a pasted post URL is checked the same way. YouTube posts must
+  appear in the channel's own upload list. LinkedIn, X and Reddit are refused until their posts can be ownership-checked.
+* **The reply is public and written by a person.** Drafts are drafts: nothing is sent automatically, nothing asks the commenter
+  to move to a private chat, and nothing sells. Do not cold-message people who only commented. Crisis comments get the
+  helpline text first; the handling note says to reply publicly, not to ask for details in the thread and not to diagnose.
+* **No third-party model sees a comment.** Triage is rules only. The MCP tools return counts and a redacted queue (no
+  usernames, no text, no drafts); the words are read in the CLI or through the REST API.
+* **REST is default-deny.** `/api/care/queue`, `/api/care/stats`, `POST /api/care/{key}/handle` return 403 until
+  `AUDIENCE_API_TOKEN` is set, then need `Authorization: Bearer <token>`.
+* **Keep less.** `purge` deletes handled care items and ordinary comments older than N days (default 90); an unhandled care item
+  is never purged. `forget` erases one person's rows. Expired provider-cache rows (which hold raw comment payloads) are now
+  deleted automatically when the ledger opens. Exports go to the git-ignored `data/exports/`.
+* **Spreadsheet-safe CSV.** Comment text is written by strangers; a cell starting with `= + - @` would run as a formula in
+  Excel / Sheets. Every CSV export (comments, professionals, SERP) now prefixes such cells with `'`.
+* **Cost control.** `--max-credits` is checked between posts; the per-day / per-job provider budgets still apply. A
+  500-comment target pages through about 34 requests per post (the page limit now grows with the request, up to 45).
+
+**Helplines in the drafts** (checked 2026-10-14 against the official Tele-MANAS portal and CHILDLINE pages): Tele-MANAS
+14416 / 1800-891-4416 (free, 24x7), 112 (India's single emergency number), CHILDLINE 1098 (added when a minor is suspected).
+Numbers change: override the text with `CARE_HELPLINE_TEXT`, re-check it every quarter, and add your own country's line for
+commenters outside India.
+
+**MCP tools:** `collect_own_comments`, `list_care_queue` (redacted), `update_care_item` (only when a person says they handled it).
+
+**Known limits:** Instagram comments arrive newest first and top-level only (no replies); the profile grid has no post dates, so
+"recent" means the grid's order; LinkedIn comments cannot be read with the providers in use (SocialCrawl has no credits);
+rules miss implicit or coded distress and will flag sarcasm, so the queue is a safety net for a human, not a classifier to trust.
 
 ## Instagram + Apify Demo
 

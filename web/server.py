@@ -46,9 +46,11 @@ from server.storage.sqlite import get_social_records, get_social_stats, save_soc
 from server.collection.jobs import CollectionJobManager, JobError
 from server.collection.export import export_job
 from server.chat.assistant import handle_assistant_message, get_platforms_availability
+from server.audience import queue as care_queue
 from server.professionals import api as pro_api
 from server.professionals.export import export_professionals
 from server.professionals.runs import ProfessionalRunManager, RunError
+from server.storage import audience as audience_store
 from server.storage import professionals as pro_store
 
 load_dotenv()
@@ -697,6 +699,53 @@ async def logo_endpoint(request: Request):
 
 
 # Starlette app configuration
+# ---------------------------------------------------------------------------
+# Care queue: comments on MMTF's own posts that need a person. These routes return what people wrote, so they are
+# DISABLED unless AUDIENCE_API_TOKEN is set (default deny), unlike the finder routes above.
+# ---------------------------------------------------------------------------
+
+def _guarded_strict(endpoint):
+    async def wrapper(request: Request):
+        token = os.getenv("AUDIENCE_API_TOKEN")
+        if not token:
+            return JSONResponse({"status": "error", "message": "care-queue routes are disabled: set AUDIENCE_API_TOKEN to enable them"}, status_code=403)
+        if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}"):
+            return JSONResponse({"status": "error", "message": "missing or wrong bearer token"}, status_code=401)
+        return await endpoint(request)
+    return wrapper
+
+
+async def care_queue_endpoint(request: Request):
+    q = request.query_params
+    try:
+        limit = int(q.get("limit", "50"))
+    except ValueError:
+        return _err("limit must be a number", 400)
+    labels = [l for l in q.getlist("label") if l] or None
+    statuses = [s for s in q.getlist("status") if s] or ["new"]
+    items = care_queue.queue_items(statuses, labels, limit, q.get("platform"), q.get("account"), with_text=True)
+    return JSONResponse({"status": "ok", "count": len(items), "items": items})
+
+
+async def care_stats_endpoint(request: Request):
+    return JSONResponse({"status": "ok", **audience_store.stats()})
+
+
+async def care_handle_endpoint(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        return _err("body must be a JSON object", 400)
+    try:
+        key = audience_store.resolve_key(request.path_params["key"])
+        done = care_queue.handle_item(key, str(body.get("status", "")), str(body.get("handled_by", "")), str(body.get("note", "")))
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    return JSONResponse({"status": "ok", "item": done}) if done else _err("item not found", 404)
+
+
 routes = [
     Route("/", endpoint=index, methods=["GET"]),
     Route("/logo.png", endpoint=logo_endpoint, methods=["GET"]),
@@ -711,6 +760,9 @@ routes = [
     Route("/api/providers/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
     Route("/api/providers/{name}/unblock", endpoint=_guarded(provider_unblock_endpoint), methods=["POST"]),
     Route("/api/assistant/message", endpoint=assistant_message_endpoint, methods=["POST"]),
+    Route("/api/care/queue", endpoint=_guarded_strict(care_queue_endpoint), methods=["GET"]),
+    Route("/api/care/stats", endpoint=_guarded_strict(care_stats_endpoint), methods=["GET"]),
+    Route("/api/care/{key}/handle", endpoint=_guarded_strict(care_handle_endpoint), methods=["POST"]),
     Route("/api/professionals/runs", endpoint=_guarded(professionals_start_endpoint), methods=["POST"]),
     Route("/api/professionals/runs/{run_id}", endpoint=_guarded(professionals_run_endpoint), methods=["GET"]),
     Route("/api/professionals/export", endpoint=_guarded(professionals_export_endpoint), methods=["GET"]),

@@ -1387,6 +1387,70 @@ def export_professionals(status: str = "approved", format: str = "csv") -> Dict[
         return {"status": "error", "message": str(exc)}
 
 
+# ---------------------------------------------------------------------------
+# Audience of MMTF's OWN accounts: comments on our posts -> triage -> care queue
+# ---------------------------------------------------------------------------
+from server.audience.collect import AudienceError as _AudienceError, collect_own_comments as _collect_own_comments  # noqa: E402
+from server.audience.queue import handle_item as _handle_care_item, queue_items as _care_queue_items  # noqa: E402
+from server.storage import audience as _audience_store  # noqa: E402
+
+
+@mcp.tool()
+async def collect_own_comments(
+    platform: str = "instagram",
+    account: Optional[str] = None,
+    post_urls: Optional[List[str]] = None,
+    max_posts: int = 10,
+    max_comments_per_post: int = 500,
+    max_credits: int = 60,
+) -> Dict[str, Any]:
+    """Read and triage the comments on MMTF's OWN posts (never anyone else's).
+
+    Works only for accounts listed in MMTF_OWN_ACCOUNTS, and every post is checked to belong to that account.
+    Comments are stored locally with a label (crisis / seeking_help / distress / question / positive / spam / other);
+    the first three form a reply queue for a person. Returns counts only: usernames and comment text stay in the
+    local database and are read through the CLI (`python scripts/audience.py queue`) or the guarded web API.
+    Spends provider credits (about 1 per 15 comments), capped by max_credits.
+    """
+    try:
+        summary = await _collect_own_comments(
+            platform, account=account, post_urls=post_urls or None, max_posts=max_posts,
+            max_comments_per_post=max_comments_per_post, max_credits=max(1, min(int(max_credits), 300)),
+        )
+        return {"status": "ok", **summary, "read_the_comments": "python scripts/audience.py queue"}
+    except (_AudienceError, ValueError) as exc:
+        return {"status": "error", "message": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+@mcp.tool()
+def list_care_queue(limit: int = 20, label: Optional[str] = None) -> Dict[str, Any]:
+    """Counts and a REDACTED list of comments on our own posts that need a person (most urgent first).
+
+    Deliberately omits usernames, comment text and reply drafts: a commenter's words are not sent to this assistant
+    just to route a queue. The team reads them with `python scripts/audience.py queue`.
+    """
+    try:
+        items = _care_queue_items(("new",), [label] if label else None, max(1, min(int(limit), 100)), with_text=False)
+        return {"status": "ok", "stats": _audience_store.stats(), "items": items, "read_the_text": "python scripts/audience.py queue"}
+    except Exception as exc:
+        return {"status": "error", "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+@mcp.tool()
+def update_care_item(key: str, status: str, handled_by: str = "", note: str = "") -> Dict[str, Any]:
+    """Record that a person replied to (or dismissed) a care-queue item: status is replied | dismissed | new.
+
+    Only call this when a team member says they have handled the item. Never mark an item yourself.
+    """
+    try:
+        done = _handle_care_item(_audience_store.resolve_key(key), status, handled_by, note)
+        return {"status": "ok", "item": done} if done else {"status": "error", "message": "item not found"}
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 if __name__ == "__main__":
     mcp.run()
 

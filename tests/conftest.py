@@ -31,6 +31,10 @@ _SECRET_VARS = (
     "LINKEDIN_ACCESS_TOKEN",
     "FACEBOOK_ACCESS_TOKEN",
     "PROFESSIONALS_API_TOKEN",
+    "AUDIENCE_API_TOKEN",
+    "MMTF_OWN_ACCOUNTS",        # which accounts count as ours: tests set it explicitly
+    "CARE_HELPLINE_TEXT",
+    "CARE_SUPPORT_LINK",
     "BRIGHTDATA_SERP_ZONE",     # set in the real .env once a SERP zone exists
     "BRIGHTDATA_SERP_COUNTRY",
 )
