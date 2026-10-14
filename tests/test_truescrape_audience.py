@@ -71,6 +71,22 @@ async def test_page_budget_has_a_hard_ceiling_and_small_requests_stay_small(ledg
     assert len(small.calls) == 2                                      # 20 comments need 2 pages, not 8
 
 
+@pytest.mark.asyncio
+async def test_pages_already_paid_for_are_kept_when_the_budget_runs_out_mid_post(ledger, monkeypatch):
+    from server.collection.collectors.base import CollectorFatalError
+    monkeypatch.setenv("BUDGET_TRUESCRAPE_PER_JOB", "3")
+
+    def pages(endpoint, params, n):
+        return envelope([comment(n * 100 + i) for i in range(15)], cursor=f"c{n}", has_more=True)
+
+    client = FakeTS(pages)
+    be = TrueScrapeBackend("instagram", client=client, ledger=ledger)
+    rows = await be.fetch_post_comments(ig_post(), 500)
+    assert len(rows) == 45 and len(client.calls) == 3                 # three pages bought, then the cap: nothing thrown away
+    with pytest.raises(CollectorFatalError, match="limit"):
+        await be.fetch_post_comments(ig_post("https://www.instagram.com/p/NEXT/"), 500)   # a fresh post fails from page one
+
+
 # ---- post facts + profile grid --------------------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_instagram_post_returns_owner_and_counts_and_is_cached(ledger):

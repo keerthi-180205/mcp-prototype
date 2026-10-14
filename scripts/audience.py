@@ -57,7 +57,8 @@ def cmd_accounts(args: argparse.Namespace) -> int:
 async def cmd_collect(args: argparse.Namespace) -> int:
     summary = await collect_own_comments(
         args.platform, account=args.account, post_urls=args.post_url or None, max_posts=args.posts,
-        max_comments_per_post=args.comments, max_credits=args.max_credits, on_progress=lambda m: print(f"  ... {m}"),
+        max_comments_per_post=args.comments, max_credits=args.max_credits, allow_fallback=args.allow_fallback,
+        on_progress=lambda m: print(f"  ... {m}"),
     )
     print(f"@{summary['account']} on {summary['platform']}: {summary['posts_found']} post(s) confirmed as ours, "
           f"{summary['posts_with_comments']} with comments")
@@ -148,6 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--posts", type=int, default=10, help="how many recent posts (default 10)")
     c.add_argument("--comments", type=int, default=500, help="comments per post (default 500)")
     c.add_argument("--max-credits", type=float, default=80.0, help="stop before the next post once this many credits are spent")
+    c.add_argument("--allow-fallback", action="store_true", help="if TrueScrape is unavailable or over budget, also use SocialCrawl / Apify (pay per result)")
     c.add_argument("--export", action="store_true", help="also write a CSV of this account's collected comments")
 
     q = sub.add_parser("queue", help="comments that need a person (most urgent first)")

@@ -505,8 +505,11 @@ look, at the lowest priority.
   deleted automatically when the ledger opens. Exports go to the git-ignored `data/exports/`.
 * **Spreadsheet-safe CSV.** Comment text is written by strangers; a cell starting with `= + - @` would run as a formula in
   Excel / Sheets. Every CSV export (comments, professionals, SERP) now prefixes such cells with `'`.
-* **Cost control.** `--max-credits` is checked between posts; the per-day / per-job provider budgets still apply. A
-  500-comment target pages through about 34 requests per post (the page limit now grows with the request, up to 45).
+* **Cost control.** `--max-credits` is checked between posts, and the per-job / per-day provider budgets still apply
+  (TrueScrape defaults: 60 per job, 200 per day; a 500-comment post needs about 34 requests, so raise
+  `BUDGET_TRUESCRAPE_PER_JOB` for a long run). Instagram comments are read with TrueScrape only: if it is unavailable or over
+  budget the run stops and says how to continue, and what was already read is saved (pages already paid for are kept). Pay-per-result
+  fallbacks (SocialCrawl, Apify) are used only with `--allow-fallback`, which the assistant cannot turn on.
 
 **Helplines in the drafts** (checked 2026-10-14 against the official Tele-MANAS portal and CHILDLINE pages): Tele-MANAS
 14416 / 1800-891-4416 (free, 24x7), 112 (India's single emergency number), CHILDLINE 1098 (added when a minor is suspected).

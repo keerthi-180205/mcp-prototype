@@ -185,6 +185,25 @@ async def test_limits_are_clamped(tmp_path):
     assert col.calls[0][1] == 1000
 
 
+def test_instagram_reads_comments_with_trusted_cheap_provider_only_unless_fallback_is_allowed():
+    from server.audience.collect import default_collector
+    assert [b.provider for b in default_collector("instagram").backends] == ["truescrape"]
+    wide = [b.provider for b in default_collector("instagram", allow_fallback=True).backends]
+    assert "truescrape" in wide and len(wide) > 1                       # SERP, TrueScrape, Apify, SocialCrawl ...
+    assert [b.provider for b in default_collector("youtube").backends] == ["yt-dlp"]
+
+
+@pytest.mark.asyncio
+async def test_a_provider_budget_stop_says_how_to_continue(tmp_path):
+    class OverBudget(FakeCollector):
+        async def fetch_comments(self, posts, limits):
+            raise CollectorFatalError("TrueScrape per-job limit reached (60 credits)")
+
+    p = post(1)
+    out, _ = await run([p], {}, str(tmp_path / "a.db"), collector=OverBudget({}))
+    assert "BUDGET_TRUESCRAPE_PER_JOB" in out["stopped"] and "saved" in out["stopped"]
+
+
 def test_stored_comment_length_is_capped():
     base = dict(platform="instagram", post_url="u", provider="x", username="a")
     assert len(to_audience(CommentRow(comment="x" * 20000, **base), ACCOUNT).comment) == 5000

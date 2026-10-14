@@ -276,11 +276,19 @@ class TrueScrapeBackend(MeteredMixin, PlatformCollector):
         rows: List[CommentRow] = []
         cursor: Optional[str] = None
         pages = min(MAX_INSTAGRAM_PAGES, max(MIN_INSTAGRAM_PAGES, math.ceil(max_comments / COMMENTS_PER_PAGE) + 1))
-        for _ in range(pages):
+        for page in range(pages):
             params: Dict[str, Any] = {"url": post.url, "count": 50}
             if cursor:
                 params["cursor"] = cursor
-            payload = await self._call("/v1/instagram/post-comments", params, "comments", COMMENTS_TTL)
+            try:
+                payload = await self._call("/v1/instagram/post-comments", params, "comments", COMMENTS_TTL)
+            except CollectorFatalError:
+                if page == 0:
+                    raise
+                # Budget or credits ran out mid-post: keep the pages already paid for. The next call raises again
+                # from page one, so the chain still switches this provider off.
+                logger.warning("TrueScrape stopped after %d comments on %s; keeping them", len(rows), post.url)
+                break
             rows += [r for r in (unified_comment_row(i, "instagram", post.url, self.provider) for i in _items(payload)) if r]
             pagination = payload.get("pagination") or {}
             cursor = pagination.get("cursor")

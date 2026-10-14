@@ -99,6 +99,9 @@ def test_collect_command_reports_the_summary_and_refuses_unconfigured_accounts(m
     monkeypatch.setattr(cli, "collect_own_comments", fake_collect)
     code, out = run(capsys, "collect", "--platform", "instagram", "--posts", "3", "--comments", "200", "--max-credits", "9", "--post-url", "u1")
     assert code == 0 and seen["max_posts"] == 3 and seen["max_comments_per_post"] == 200 and seen["max_credits"] == 9 and seen["post_urls"] == ["u1"]
+    assert seen["allow_fallback"] is False
+    run(capsys, "collect", "--platform", "instagram", "--allow-fallback")
+    assert seen["allow_fallback"] is True
     assert "3 post(s) confirmed as ours" in out and "2 new item(s) need a person" in out and "credit cap reached" in out and "skipped 1 collab post" in out
 
 

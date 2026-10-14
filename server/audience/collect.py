@@ -1,7 +1,8 @@
 """Collect the comments on MMTF's own posts and triage them.
 
 Guards, in order: the account must be listed in MMTF_OWN_ACCOUNTS; every post must be proven to belong to it;
-the credit cap is checked between posts; the account's own replies are not treated as audience.
+the credit cap is checked between posts; the account's own replies are not treated as audience; paid fallback
+providers are used only when the operator asks (allow_fallback).
 """
 
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
@@ -17,6 +18,17 @@ from server.storage import audience as store
 
 class AudienceError(Exception):
     """The request cannot be carried out (and nothing was collected)."""
+
+
+def default_collector(platform: str, allow_fallback: bool = False) -> Any:
+    """Instagram reads comments with TrueScrape only, so spend is predictable. Falling back to SocialCrawl / Apify
+    (pay-per-result) is a choice the operator makes explicitly, never something a long run drifts into."""
+    from server.collection.registry import get_collector
+    if allow_fallback or platform != "instagram":
+        return get_collector(platform)
+    from server.collection.collectors.chain import ChainedCollector
+    from server.collection.collectors.truescrape import TrueScrapeBackend
+    return ChainedCollector("instagram", [TrueScrapeBackend("instagram")])
 
 
 def _credits(source: Any, collector: Any) -> float:
@@ -51,6 +63,7 @@ async def collect_own_comments(
     max_posts: int = 10,
     max_comments_per_post: int = 500,
     max_credits: float = 80.0,
+    allow_fallback: bool = False,
     source: Any = None,
     collector: Any = None,
     db_path: Optional[str] = None,
@@ -86,8 +99,7 @@ async def collect_own_comments(
         return summary
 
     if collector is None:
-        from server.collection.registry import get_collector
-        collector = get_collector(platform)
+        collector = default_collector(platform, allow_fallback)
 
     for index, post in enumerate(posts, 1):
         spent = _credits(source, collector)
@@ -100,8 +112,12 @@ async def collect_own_comments(
         try:
             got = await collector.fetch_comments([candidate], {post.url: max_comments_per_post})
         except CollectorFatalError as exc:
-            notes.append(f"stopped: {str(exc)[:160]}")
-            summary["stopped"] = "provider unavailable"
+            reason = str(exc)[:160]
+            notes.append(f"stopped: {reason}")
+            hint = ""
+            if any(word in reason.lower() for word in ("limit", "budget")):
+                hint = " (raise BUDGET_TRUESCRAPE_PER_JOB / BUDGET_TRUESCRAPE_PER_DAY, or run again later; what was read is saved)"
+            summary["stopped"] = "provider unavailable" + hint
             break
         except Exception as exc:
             notes.append(f"post {index}: {str(exc)[:120]}")
