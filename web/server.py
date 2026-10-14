@@ -11,6 +11,7 @@ Supports ANY subject/topic:
 """
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -45,6 +46,10 @@ from server.storage.sqlite import get_social_records, get_social_stats, save_soc
 from server.collection.jobs import CollectionJobManager, JobError
 from server.collection.export import export_job
 from server.chat.assistant import handle_assistant_message, get_platforms_availability
+from server.professionals import api as pro_api
+from server.professionals.export import export_professionals
+from server.professionals.runs import ProfessionalRunManager, RunError
+from server.storage import professionals as pro_store
 
 load_dotenv()
 logger = logging.getLogger("mcp_server.web")
@@ -537,7 +542,8 @@ async def credit_guard_status_endpoint(request: Request):
             "budget": get_budget(name),
         }
     providers["brightdata"]["serp_zone_configured"] = bool(os.getenv("BRIGHTDATA_SERP_ZONE"))
-    providers["brightdata"]["note"] = "SERP discovery for X / Instagram / LinkedIn (needs BRIGHTDATA_SERP_ZONE)"
+    providers["brightdata"]["note"] = ("SERP discovery for X / Instagram / LinkedIn and the therapist finder; "
+                                       "the SERP zone is detected automatically unless BRIGHTDATA_SERP_ZONE pins one")
 
     return JSONResponse({
         "status": "success",
@@ -545,6 +551,127 @@ async def credit_guard_status_endpoint(request: Request):
         "providers": providers,
         "platforms": get_platforms_availability(),
     })
+
+
+# ---------------------------------------------------------------------------
+# Therapist / psychiatrist finder (review queue). Nothing is exported until a person approves it.
+# ---------------------------------------------------------------------------
+
+professionals_manager = ProfessionalRunManager()
+
+
+def _guarded(endpoint):
+    """These routes expose contact details and spend search credits. If PROFESSIONALS_API_TOKEN is set, they
+    require `Authorization: Bearer <token>`; without it they behave like the other local-only routes."""
+    async def wrapper(request: Request):
+        token = os.getenv("PROFESSIONALS_API_TOKEN")
+        if token and not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}"):
+            return JSONResponse({"status": "error", "message": "missing or wrong bearer token"}, status_code=401)
+        return await endpoint(request)
+    return wrapper
+_PRO_START_FIELDS = ("city", "specialties", "focus", "platforms", "pages", "country", "max_serp_credits",
+                     "max_profile_lookups", "max_sites")
+
+
+def _pro_manager(request: Request) -> ProfessionalRunManager:
+    return getattr(request.app.state, "professionals_manager", professionals_manager)
+
+
+def _err(message: str, status: int) -> JSONResponse:
+    return JSONResponse({"status": "error", "message": message}, status_code=status)
+
+
+async def professionals_start_endpoint(request: Request):
+    """Start a background search: {city, specialties?, focus?, platforms?, pages?, max_serp_credits?, ...}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        return _err("body must be a JSON object", 400)
+    try:
+        return JSONResponse(_pro_manager(request).start(**{k: v for k, v in body.items() if k in _PRO_START_FIELDS}))
+    except (RunError, TypeError) as exc:
+        return _err(str(exc), 400)
+
+
+async def professionals_run_endpoint(request: Request):
+    try:
+        return JSONResponse(_pro_manager(request).status(request.path_params["run_id"]))
+    except RunError as exc:
+        return _err(str(exc), 404)
+
+
+async def professionals_list_endpoint(request: Request):
+    q = request.query_params
+
+    def num(name: str, default, cast):
+        try:
+            return cast(q.get(name, default))
+        except (TypeError, ValueError):
+            return default
+
+    flagged = q.get("needs_review")
+    try:
+        return JSONResponse(pro_api.list_view(
+            db_path=_pro_manager(request).db_path, status=q.get("status", "new"), role=q.get("role"),
+            entity_type=q.get("entity_type"), city=q.get("city"), min_confidence=num("min_confidence", 0.0, float),
+            has_channel=q.get("has_channel"), needs_review=None if flagged is None else flagged.lower() in ("1", "true", "yes"),
+            q=q.get("q"), sort=q.get("sort", "fit_score"), page=num("page", 1, int), page_size=num("page_size", 25, int)))
+    except ValueError as exc:
+        return _err(str(exc), 400)
+
+
+async def professionals_detail_endpoint(request: Request):
+    item = pro_api.detail_view(request.path_params["pro_id"], _pro_manager(request).db_path)
+    return JSONResponse(item) if item else _err("unknown professional", 404)
+
+
+async def professionals_review_endpoint(request: Request):
+    """Record a human decision: {decision: approve|reject|dnc|new, note?, licence_verified?: true|false|null}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    kwargs = {"licence_verified": body["licence_verified"]} if isinstance(body, dict) and "licence_verified" in body else {}
+    try:
+        item = pro_api.review_view(request.path_params["pro_id"], (body or {}).get("decision", ""), (body or {}).get("note", ""),
+                                   db_path=_pro_manager(request).db_path, **kwargs)
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    return JSONResponse(item) if item else _err("unknown professional", 404)
+
+
+async def professionals_suppress_endpoint(request: Request):
+    """Add to the do-not-contact list: {kind: email|phone|domain|profile_url, value, reason?}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        value = pro_store.add_suppression((body or {}).get("kind", ""), (body or {}).get("value", ""),
+                                          (body or {}).get("reason", ""), _pro_manager(request).db_path)
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    return JSONResponse({"status": "ok", "kind": body["kind"], "value": value})
+
+
+async def professionals_suppression_list_endpoint(request: Request):
+    return JSONResponse({"items": pro_store.list_suppression(_pro_manager(request).db_path)})
+
+
+async def professionals_export_endpoint(request: Request):
+    """Download approved professionals (do-not-contact and suppressed people are never included)."""
+    status = request.query_params.get("status", "approved")
+    fmt = request.query_params.get("format", "csv")
+    try:
+        result = export_professionals([status], fmt, db_path=_pro_manager(request).db_path)
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    media = "text/csv; charset=utf-8" if fmt == "csv" else "application/json"
+    name = os.path.basename(result["path"])
+    return FileResponse(path=result["path"], media_type=media, filename=name,
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 async def logo_endpoint(request: Request):
@@ -569,6 +696,14 @@ routes = [
     Route("/api/credit-guard/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
     Route("/api/providers/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
     Route("/api/assistant/message", endpoint=assistant_message_endpoint, methods=["POST"]),
+    Route("/api/professionals/runs", endpoint=_guarded(professionals_start_endpoint), methods=["POST"]),
+    Route("/api/professionals/runs/{run_id}", endpoint=_guarded(professionals_run_endpoint), methods=["GET"]),
+    Route("/api/professionals/export", endpoint=_guarded(professionals_export_endpoint), methods=["GET"]),
+    Route("/api/professionals/suppression", endpoint=_guarded(professionals_suppression_list_endpoint), methods=["GET"]),
+    Route("/api/professionals/suppress", endpoint=_guarded(professionals_suppress_endpoint), methods=["POST"]),
+    Route("/api/professionals", endpoint=_guarded(professionals_list_endpoint), methods=["GET"]),
+    Route("/api/professionals/{pro_id}/review", endpoint=_guarded(professionals_review_endpoint), methods=["POST"]),
+    Route("/api/professionals/{pro_id}", endpoint=_guarded(professionals_detail_endpoint), methods=["GET"]),
     Route("/api/chat", endpoint=chat_endpoint, methods=["POST"]),
     Route("/api/chat/export", endpoint=chat_export_endpoint, methods=["GET"]),
     Route("/api/export/all", endpoint=chat_export_endpoint, methods=["GET"]),

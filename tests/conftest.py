@@ -30,6 +30,9 @@ _SECRET_VARS = (
     "YOUTUBE_COOKIES_FILE",
     "LINKEDIN_ACCESS_TOKEN",
     "FACEBOOK_ACCESS_TOKEN",
+    "PROFESSIONALS_API_TOKEN",
+    "BRIGHTDATA_SERP_ZONE",     # set in the real .env once a SERP zone exists
+    "BRIGHTDATA_SERP_COUNTRY",
 )
 
 # dotenv never overrides a variable that already exists, so "" keeps the real .env value out.
@@ -51,7 +54,9 @@ def _isolated_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(export, "DEFAULT_EXPORT_DIR", str(tmp_path / "exports"))
 
     from server.config import get_settings
+    from server.providers.brightdata.serp import reset_zone_cache
 
+    reset_zone_cache()
     get_settings(reload=True)
     yield
     get_settings(reload=True)

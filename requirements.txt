@@ -11,3 +11,4 @@ rdt-cli>=0.4.1
 feedparser>=6.0
 starlette>=0.37
 uvicorn>=0.30
+beautifulsoup4>=4.12

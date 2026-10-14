@@ -307,8 +307,9 @@ TrueScrape has no X search/replies and no LinkedIn comments; `twitter-cli` 0.8.5
 shows what is usable right now and why.
 
 **Bright Data SERP (free tier).** Bright Data's free tier is 5,000 credits a month (no card, no rollover,
-shared by SERP / Web Unlocker / Web Scraper). Create a "SERP API" zone in its control panel and set
-`BRIGHTDATA_SERP_ZONE` in `.env`; `python scripts/serp_search.py --zones` lists your zones. SERP finds posts
+shared by SERP / Web Unlocker / Web Scraper). Create a "SERP API" zone in its control panel: with exactly one SERP
+zone on the account it is found automatically (zones get renamed and deleted, so nothing needs editing); set
+`BRIGHTDATA_SERP_ZONE` only to pin one when you have several. `python scripts/serp_search.py --zones` lists your zones. SERP finds posts
 through Google (`site:x.com inurl:status "topic"`, `site:instagram.com topic`, `site:linkedin.com/posts topic`),
 1 credit per result page; it never reads comments, so the chain pairs it with whoever can. It also finds
 professionals' public profiles from the command line:
@@ -394,6 +395,57 @@ Open `http://localhost:8080` in your web browser.
 | `GET` | `/api/collect/{job_id}/export` | Direct file attachment download (`?format=csv` with UTF-8 BOM or `?format=json`; add `&full=1` for provider, comment_id, parent_id and collected_at columns). |
 | `GET` | `/api/providers/status` | Provider usage, budgets, blocked providers and per-platform chains (never exposes secrets). |
 | `POST` | `/api/assistant/message` | Conversational assistant message dispatch (`session_id, text, action?`). |
+
+## Therapist & Psychiatrist Finder
+
+Finds practising therapists, psychologists and psychiatrists in a city who publish how to reach them, so the MMTF
+team can invite them to the platform. It only uses public, self-published information, and **nothing is contacted or
+exported until a person approves it**.
+
+```
+Google (Bright Data SERP)  ->  candidates: LinkedIn profile / Instagram handle / website      (LinkedIn pages are never opened)
+  -> rules drop non-clinicians (coaches, healers, students, patients, listing sites); Gemini only breaks ties
+  -> Instagram bio (TrueScrape, 1 credit) -> the clinician's own website -> its contact page     (robots.txt respected)
+  -> licence *claims*, city check, score -> saved as "new" -> a person reviews -> approved people are exported
+```
+
+```bash
+python scripts/find_professionals.py plan --city Bangalore                  # queries + maximum credits; spends nothing
+python scripts/find_professionals.py run  --city Bangalore                  # search, classify, read bios and sites
+python scripts/find_professionals.py list --has-channel any                 # review queue, best first ( ! = look closer )
+python scripts/find_professionals.py show 3fa9c1                            # every channel and the page it was found on
+python scripts/find_professionals.py review 3fa9c1 approve --note "RCI register checked"   # approve | reject | dnc | new
+python scripts/find_professionals.py licence 3fa9c1 verified                # record YOUR check in the official register
+python scripts/find_professionals.py export                                 # CSV of APPROVED people only
+```
+
+**Rules it keeps**
+* A caption that mentions a role is not a self-description: for Instagram only the bio (or first-person words) counts, and
+  accounts that speak as "we / our" are classified as organisations, not as the doctor they introduce.
+* Gemini is optional and only used for unclear cases; its answer is accepted only if it quotes words that really occur in
+  the text. If it is down or slow the run carries on and the unclear profiles stay flagged.
+* Websites: robots.txt honoured (an unreadable one means skip), at most two pages per site, one request per host per
+  second, plain HTTP only (no JavaScript, CAPTCHA solving or proxies). Only public internet addresses are fetched, so a
+  bio linking to `127.0.0.1` or a cloud-metadata address is refused, redirects included.
+* Every channel (email, phone, WhatsApp, contact form) stores the URL it was found on. Generic inboxes (`info@`) are
+  marked as such. `licence` data is a *claim* found in the text; only a person can mark it verified.
+* `dnc` (do not contact) and `suppress` put emails, phones, profiles and domains on a permanent list that exports
+  respect; shared mail providers (gmail.com ...) can never be suppressed by domain.
+* Cost control: `--max-credits` (search), `--max-profiles` (Instagram bios), `--max-sites`; repeated searches and bios
+  are cached. One run at a time.
+
+**REST** (`/api/professionals*`; set `PROFESSIONALS_API_TOKEN` to require `Authorization: Bearer <token>`)
+`POST /runs` start - `GET /runs/{id}` status - `GET /` review queue (filters: status, role, entity_type, city, has_channel,
+needs_review, q, sort) - `GET /{id}` detail - `POST /{id}/review` - `POST /suppress` - `GET /export?status=approved&format=csv`.
+**MCP tools:** `find_professionals` (`dry_run` shows the plan), `get_professionals_run`, `list_professionals`,
+`review_professional`, `export_professionals`.
+
+**First live run (Bangalore, 2 specialties, about 6 search credits, 24-125 s):** 39 candidates -> 32 kept = 19 individual
+clinicians from LinkedIn (9 clinical psychologists, 10 psychiatrists) + 13 organisations. LinkedIn profiles carry no contact
+details (they stay behind a login), so for individuals the channel is their profile; email / phone / contact-form channels
+came from clinic and hospital sites (10 of 32 records). Known limits: the same person found on LinkedIn and Instagram is two
+records (merged only when an Instagram bio links to a site that was also found separately); finding an individual's own
+website from their name is not built yet.
 
 ## Instagram + Apify Demo
 

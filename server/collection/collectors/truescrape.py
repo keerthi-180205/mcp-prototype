@@ -28,6 +28,7 @@ REMOVED = {"[deleted]", "[removed]"}
 BOT_AUTHORS = {"automoderator"}
 SEARCH_TTL = 6 * 3600       # search results go stale quickly
 COMMENTS_TTL = 24 * 3600
+PROFILE_TTL = 7 * 24 * 3600  # bios and follower counts change slowly
 MAX_INSTAGRAM_PAGES = 8     # hard stop on cursor paging (8 credits per post at most)
 
 CAPABILITIES = {
@@ -175,6 +176,29 @@ class TrueScrapeBackend(MeteredMixin, PlatformCollector):
                 if cand and cand.post_id not in found:
                     found[cand.post_id] = cand
         return list(found.values())
+
+    # ---- profiles ------------------------------------------------------------------
+    async def instagram_profile(self, handle: str) -> Optional[Dict[str, Any]]:
+        """Public profile facts for one Instagram handle (bio, links, followers): 1 credit, cached for a week."""
+        if self.platform != "instagram":
+            raise ValueError("instagram_profile is only available on the instagram backend")
+        handle = handle.lstrip("@").strip()
+        payload = await self._call("/v1/instagram/profile", {"handle": handle}, "profile", PROFILE_TTL)
+        data = (payload or {}).get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict) or not data:
+            return None
+        links = [(x if isinstance(x, str) else (x or {}).get("url")) for x in (data.get("externalLinks") or [])]
+        return {
+            "handle": data.get("handle") or handle,
+            "display_name": data.get("displayName") or "",
+            "bio": data.get("bio") or "",
+            "external_links": [l for l in links if l],
+            "followers": data.get("followerCount"),
+            "is_business": data.get("isBusiness"),
+            "category": data.get("category"),
+            "is_private": bool(data.get("isPrivate")),
+            "url": data.get("url") or f"https://www.instagram.com/{handle}/",
+        }
 
     # ---- comments ------------------------------------------------------------------
     async def fetch_post_comments(self, post: PostCandidate, max_comments: int) -> List[CommentRow]:

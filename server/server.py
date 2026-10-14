@@ -1266,6 +1266,112 @@ def export_collection_results(job_id: str, format: str = "csv") -> Dict[str, Any
         return _job_error(exc)
 
 
+# ---------------------------------------------------------------------------
+# Therapist / psychiatrist finder: search -> human review -> approved export
+# ---------------------------------------------------------------------------
+from server.professionals import api as _pro_api  # noqa: E402
+from server.professionals.export import export_professionals as _export_professionals  # noqa: E402
+from server.professionals.models import DEFAULT_SPECIALTIES as _DEFAULT_SPECIALTIES, FinderParams as _FinderParams  # noqa: E402
+from server.professionals.queries import build_queries as _build_queries, estimate as _estimate  # noqa: E402
+from server.professionals.runs import ProfessionalRunManager, RunError  # noqa: E402
+
+professional_runs = ProfessionalRunManager()
+
+
+@mcp.tool()
+async def find_professionals(
+    city: str,
+    specialties: Optional[List[str]] = None,
+    focus: Optional[str] = None,
+    platforms: Optional[List[str]] = None,
+    pages: int = 1,
+    max_search_credits: int = 30,
+    max_instagram_profiles: int = 15,
+    max_sites: int = 25,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """Find practising therapists, psychologists and psychiatrists in a city who publish how to reach them.
+
+    Searches Google for LinkedIn profiles, Instagram accounts and practice websites, keeps real clinicians
+    (coaches, students and patients are dropped), then reads the Instagram bio and the clinician's own
+    website for the contact channel they publish. LinkedIn pages are never opened. Everything is saved
+    for REVIEW: nothing is contacted or exported until a person approves it.
+
+    dry_run=true only returns the Google queries and the maximum credits a run could use.
+    Otherwise it starts in the background and returns a run_id: poll get_professionals_run, then
+    list_professionals and review_professional.
+    """
+    try:
+        params = dict(city=city, specialties=specialties or list(_DEFAULT_SPECIALTIES),
+                      focus=focus, platforms=platforms or ["linkedin", "instagram", "web"], pages=pages,
+                      max_serp_credits=max_search_credits, max_profile_lookups=max_instagram_profiles, max_sites=max_sites)
+        if dry_run:
+            p = _FinderParams(**params)
+            return {"status": "plan", "queries": [{"platform": q.platform, "query": q.q} for q in _build_queries(p)], "estimate": _estimate(p)}
+        return professional_runs.start(**params)
+    except (RunError, ValueError) as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def get_professionals_run(run_id: str) -> Dict[str, Any]:
+    """Progress and results summary of a finder run (candidates found, kept, credits used, why others were dropped)."""
+    try:
+        return professional_runs.status(run_id)
+    except RunError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def list_professionals(
+    status: str = "new",
+    role: Optional[str] = None,
+    city: Optional[str] = None,
+    has_channel: Optional[str] = None,
+    needs_review: Optional[bool] = None,
+    min_confidence: float = 0.0,
+    q: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> Dict[str, Any]:
+    """The review queue, best first. status: new | approved | rejected | do_not_contact | all.
+
+    has_channel: any | email | personal_email | phone | contact_form. Every channel lists the page it was found on.
+    """
+    try:
+        return _pro_api.list_view(status=status, role=role, city=city, has_channel=has_channel, needs_review=needs_review,
+                                  min_confidence=min_confidence, q=q, page=page, page_size=page_size)
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def review_professional(pro_id: str, decision: str, note: str = "") -> Dict[str, Any]:
+    """Record a person's decision on one professional: approve | reject | dnc | new.
+
+    Only a human should approve: check the licence in the official register first (RCI for psychologists, the
+    medical council for psychiatrists). dnc (do not contact) also puts their profile, emails and phones on the
+    permanent do-not-contact list.
+    """
+    try:
+        item = _pro_api.review_view(pro_id, decision, note)
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+    return item or {"status": "error", "message": f"unknown pro_id: {pro_id}"}
+
+
+@mcp.tool()
+def export_professionals(status: str = "approved", format: str = "csv") -> Dict[str, Any]:
+    """Export reviewed professionals to a CSV or JSON file and return its path.
+
+    Defaults to APPROVED people. Do-not-contact and suppressed people are never exported.
+    """
+    try:
+        return {"status": "ok", **_export_professionals([status], format)}
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 if __name__ == "__main__":
     mcp.run()
 

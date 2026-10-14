@@ -12,11 +12,13 @@ Verified live (Oct 2026). Two things to know:
 
 import asyncio
 import datetime
+import hashlib
 import logging
 import re
+import time
 import urllib.parse
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -25,6 +27,14 @@ from server.config import Settings, get_settings
 logger = logging.getLogger("mcp_server.providers.brightdata.serp")
 
 SEARCH_URL = "https://www.google.com/search"
+ZONE_TTL = 600.0  # seconds a detected zone is remembered
+# (base url, key fingerprint) -> (zone name, expires). Shared by every client so each job does not re-list zones.
+_ZONE_CACHE: Dict[Tuple[str, str], Tuple[str, float]] = {}
+
+
+def reset_zone_cache() -> None:
+    _ZONE_CACHE.clear()
+
 MAX_ATTEMPTS = 3
 # Upstream statuses that retrying cannot fix (bad query, blocked parameter, missing page). Everything
 # else - captcha (502), "failed_query_rejected" (429), timeouts - is transient and is retried.
@@ -93,6 +103,21 @@ def parse_likes(display: str) -> Optional[int]:
     return int(value * {"": 1, "k": 1_000, "m": 1_000_000}[m.group(2).lower()])
 
 
+_FOLLOWERS = re.compile(r"([\d][\d.,]*)\s*([KkMm]?)\+?\s+followers?\b")
+
+
+def parse_followers(display: str) -> Optional[int]:
+    """"1.7K+ followers" -> 1700 (Google shows this line for LinkedIn profiles)."""
+    m = _FOLLOWERS.search(display or "")
+    if not m:
+        return None
+    try:
+        value = float(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+    return int(value * {"": 1, "k": 1_000, "m": 1_000_000}[m.group(2).lower()])
+
+
 def parse_age(display: str, now: Optional[datetime.datetime] = None) -> Optional[str]:
     """ISO timestamp for "3 months ago" style text. Approximate by nature: Google only gives a coarse age."""
     m = _AGE.search(display or "")
@@ -146,12 +171,47 @@ class BrightDataSerpClient:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self._api_key and self._api_key.strip() and self.zone and self.zone.strip())
+        """Needs only the API key: the SERP zone is looked up on the account when BRIGHTDATA_SERP_ZONE is not set."""
+        return bool(self._api_key and self._api_key.strip())
 
     def not_configured_reason(self) -> str:
-        if not (self._api_key and self._api_key.strip()):
-            return "BRIGHTDATA_API_KEY is not set"
-        return "BRIGHTDATA_SERP_ZONE is not set (use the name of your SERP API zone from the Bright Data control panel)"
+        return "BRIGHTDATA_API_KEY is not set"
+
+    def _zone_key(self) -> Tuple[str, str]:
+        return (self.base_url, hashlib.sha1((self._api_key or "").encode()).hexdigest()[:12])
+
+    async def resolve_zone(self, http: httpx.AsyncClient) -> str:
+        """The zone to search through: BRIGHTDATA_SERP_ZONE if set, otherwise the account's only SERP zone.
+
+        Zones get created, renamed and deleted in the control panel, so a stale name in .env (or a long-running
+        server that never re-reads it) must not break searches. With none or several SERP zones we refuse to guess.
+        """
+        if self.zone and self.zone.strip():
+            return self.zone.strip()
+        hit = _ZONE_CACHE.get(self._zone_key())
+        if hit and hit[1] > time.monotonic():
+            return hit[0]
+        try:
+            resp = await http.get(f"{self.base_url}/zone/get_active_zones",
+                                  headers={"Authorization": f"Bearer {self._api_key.strip()}"}, timeout=30)
+        except httpx.HTTPError as exc:
+            raise BrightDataSerpError(f"could not list Bright Data zones: {type(exc).__name__}") from exc
+        if resp.status_code in (401, 403):
+            raise BrightDataSerpAuthError(f"Bright Data rejected the API key (HTTP {resp.status_code})")
+        if resp.status_code != 200:
+            raise BrightDataSerpError(f"could not list Bright Data zones (HTTP {resp.status_code})")
+        try:
+            names = [z["name"] for z in resp.json() if isinstance(z, dict) and z.get("type") == "serp" and z.get("name")]
+        except ValueError as exc:
+            raise BrightDataSerpError("Bright Data zone list was not JSON") from exc
+        if not names:
+            raise BrightDataSerpAuthError("this Bright Data account has no SERP API zone: create one in the control panel "
+                                          "(or set BRIGHTDATA_SERP_ZONE)")
+        if len(names) > 1:
+            raise BrightDataSerpAuthError(f"several SERP zones exist ({', '.join(sorted(names))}): "
+                                          "set BRIGHTDATA_SERP_ZONE to the one to use")
+        _ZONE_CACHE[self._zone_key()] = (names[0], time.monotonic() + ZONE_TTL)
+        return names[0]
 
     def search_url(self, query: str, start: int = 0, tbs: Optional[str] = None, country: Optional[str] = None,
                    language: str = "en") -> str:
@@ -170,13 +230,15 @@ class BrightDataSerpClient:
         if not self.is_configured:
             raise BrightDataSerpAuthError(self.not_configured_reason())
 
-        body = {"zone": self.zone, "url": self.search_url(query, start, tbs, country, language), "format": "raw"}
         headers = {"Authorization": f"Bearer {self._api_key.strip()}", "Content-Type": "application/json"}
         http = self._client if self._client is not None and not self._client.is_closed else httpx.AsyncClient()
         owns = http is not self._client
         last = ""
         attempts = 0
         try:
+            zone = await self.resolve_zone(http)
+            auto_detected = not (self.zone and self.zone.strip())
+            body = {"zone": zone, "url": self.search_url(query, start, tbs, country, language), "format": "raw"}
             for attempt in range(1, MAX_ATTEMPTS + 1):
                 attempts = attempt
                 try:
@@ -189,7 +251,9 @@ class BrightDataSerpClient:
                     if resp.status_code in (401, 403):
                         raise BrightDataSerpAuthError(f"Bright Data rejected the API key (HTTP {resp.status_code})")
                     if resp.status_code in (400, 404, 422) and "zone" in resp.text.lower():
-                        raise BrightDataSerpAuthError(f"Bright Data zone problem for {self.zone!r}: {resp.text[:160]}")
+                        if auto_detected:
+                            _ZONE_CACHE.pop(self._zone_key(), None)   # the zone was deleted or renamed: look again next time
+                        raise BrightDataSerpAuthError(f"Bright Data zone problem for {zone!r}: {resp.text[:160]}")
                     status = resp.headers.get("x-brd-status-code", str(resp.status_code))
                     error = resp.headers.get("x-brd-error-code") or resp.headers.get("x-brd-error")
                     if resp.status_code < 400 and status == "200" and not error:

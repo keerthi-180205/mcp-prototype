@@ -53,8 +53,10 @@ def list_zones() -> int:
     for z in zones:
         print(f"  {z.get('name'):24} type={z.get('type')}")
     serp = [z["name"] for z in zones if z.get("type") == "serp"]
-    if serp:
-        print(f"\nAdd this line to .env:\n  BRIGHTDATA_SERP_ZONE={serp[0]}")
+    if len(serp) == 1:
+        print(f"\nOnly one SERP zone ({serp[0]}): it is used automatically. Set BRIGHTDATA_SERP_ZONE={serp[0]} in .env only to pin it.")
+    elif len(serp) > 1:
+        print(f"\nSeveral SERP zones: add the one to use to .env, e.g.\n  BRIGHTDATA_SERP_ZONE={serp[0]}")
     return 0
 
 

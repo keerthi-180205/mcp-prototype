@@ -248,6 +248,10 @@ class GeminiClient:
                 f"Gemini output does not conform to expected schema {response_model.__name__}: {exc}"
             ) from exc
 
+    async def generate_structured(self, prompt: str, response_model: Type[T]) -> T:
+        """Run any prompt and validate the JSON reply against a Pydantic model (timeouts, retries, error mapping included)."""
+        return await self._generate_structured(prompt, response_model)
+
     def _translate_exception(self, exc: Exception) -> None:
         """Map SDK and network exceptions to domain-specific GeminiError types."""
         err_str = str(exc).lower()

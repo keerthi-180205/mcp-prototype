@@ -151,23 +151,24 @@ async def test_auth_and_zone_errors_are_not_retried():
 
 
 @pytest.mark.asyncio
-async def test_no_results_is_a_success_and_missing_zone_is_reported():
+async def test_no_results_is_a_success_and_a_missing_key_is_reported():
     page = await make_client(lambda r: httpx.Response(200, json={"general": {}, "navigation": []},
                                                       headers={"x-brd-status-code": "200"})).search("q")
     assert page.results == [] and page.next_start is None
 
-    unconfigured = BrightDataSerpClient(api_key="key", zone=None, settings=_Settings())
-    assert not unconfigured.is_configured
-    with pytest.raises(BrightDataSerpAuthError, match="BRIGHTDATA_SERP_ZONE"):
-        await unconfigured.search("q")
+    keyless = BrightDataSerpClient(api_key=None, zone="serp_api1", settings=_Settings(api_key=None))
+    assert not keyless.is_configured
+    with pytest.raises(BrightDataSerpAuthError, match="BRIGHTDATA_API_KEY"):
+        await keyless.search("q")
 
 
 class _Settings:
-    brightdata_api_key = "key"
-    brightdata_serp_zone = None
-    brightdata_serp_country = None
-    brightdata_base_url = "https://api.brightdata.com"
-    brightdata_timeout = 30.0
+    def __init__(self, api_key="key", zone=None):
+        self.brightdata_api_key = api_key
+        self.brightdata_serp_zone = zone
+        self.brightdata_serp_country = None
+        self.brightdata_base_url = "https://api.brightdata.com"
+        self.brightdata_timeout = 30.0
 
 
 # ---- metering ---------------------------------------------------------------------------
@@ -320,22 +321,19 @@ async def test_backend_cannot_read_comments_and_rejects_other_platforms():
 
 
 # ---- wiring -----------------------------------------------------------------------------
-def test_chains_use_serp_only_when_a_zone_is_configured(monkeypatch):
+def test_chains_use_serp_whenever_the_account_key_is_present(monkeypatch):
     from server.collection.registry import get_collector
     from server.config import get_settings
 
-    monkeypatch.setenv("BRIGHTDATA_API_KEY", "k")
-    get_settings(reload=True)
     x = get_collector("x").describe()
-    assert "brightdata" not in x["discover"]
-    assert "BRIGHTDATA_SERP_ZONE" in x["unavailable"]["brightdata"]
+    assert "brightdata" not in x["discover"] and "BRIGHTDATA_API_KEY" in x["unavailable"]["brightdata"]
 
-    monkeypatch.setenv("BRIGHTDATA_SERP_ZONE", "serp_api1")
+    monkeypatch.setenv("BRIGHTDATA_API_KEY", "k")             # no zone configured: it is looked up on the account when needed
     get_settings(reload=True)
     # tests blank the twitter-cli cookies and the SocialCrawl key, so SERP is the only X discovery left
     assert get_collector("x").describe()["discover"] == ["brightdata"]
     ig = get_collector("instagram").describe()
-    assert ig["discover"][0] == "brightdata"  # cheapest way to find Instagram posts goes first
+    assert ig["discover"][0] == "brightdata"                  # cheapest way to find Instagram posts goes first
     assert "brightdata" not in ig["comments"]
 
 
@@ -380,3 +378,72 @@ async def test_good_page_is_cached_and_not_flagged(ledger):
     assert not (await s.search("site:linkedin.com/in psychologist")).degraded
     await s.search("site:linkedin.com/in psychologist")
     assert len(calls) == 1
+
+
+# ---- the SERP zone is found on the account (zones get renamed and deleted in the control panel) -------------------
+def zone_server(zones, calls, request_zone_status=200, list_status=200):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/zone/get_active_zones":
+            calls["list"] = calls.get("list", 0) + 1
+            return httpx.Response(list_status, json=zones)
+        body = json.loads(request.content)
+        calls.setdefault("used", []).append(body["zone"])
+        if request_zone_status != 200:
+            return httpx.Response(request_zone_status, text='{"error": "zone not found"}')
+        return httpx.Response(200, json=payload([organic("https://x.com/a/status/1")]), headers={"x-brd-status-code": "200"})
+    return handler
+
+
+def auto_client(handler):
+    return BrightDataSerpClient(api_key="key", zone=None, settings=_Settings(), retry_delay=0,
+                                client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+
+
+@pytest.mark.asyncio
+async def test_the_only_serp_zone_is_used_and_remembered_across_clients():
+    calls = {}
+    zones = [{"name": "scraping_browser1", "type": "browser_api"}, {"name": "serp_api2", "type": "serp"}]   # browser zones are ignored
+    await auto_client(zone_server(zones, calls)).search("a")
+    await auto_client(zone_server(zones, calls)).search("b")                         # a new client in a later job
+    assert calls["used"] == ["serp_api2", "serp_api2"] and calls["list"] == 1        # listed once, not per search
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_zone_wins_and_skips_the_lookup():
+    calls = {}
+    client = BrightDataSerpClient(api_key="key", zone="pinned", settings=_Settings(), retry_delay=0,
+                                  client=httpx.AsyncClient(transport=httpx.MockTransport(
+                                      zone_server([{"name": "serp_api2", "type": "serp"}], calls))))
+    await client.search("a")
+    assert calls["used"] == ["pinned"] and "list" not in calls
+
+
+@pytest.mark.asyncio
+async def test_no_serp_zone_or_several_is_a_clear_error_not_a_guess():
+    with pytest.raises(BrightDataSerpAuthError, match="no SERP API zone"):
+        await auto_client(zone_server([{"name": "b1", "type": "browser_api"}], {})).search("q")
+    with pytest.raises(BrightDataSerpAuthError, match="serp_a, serp_b"):
+        await auto_client(zone_server([{"name": "serp_b", "type": "serp"}, {"name": "serp_a", "type": "serp"}], {})).search("q")
+
+
+@pytest.mark.asyncio
+async def test_zone_listing_failures_are_distinguished_and_not_cached():
+    with pytest.raises(BrightDataSerpAuthError):
+        await auto_client(zone_server([], {}, list_status=401)).search("q")
+    with pytest.raises(BrightDataSerpError) as err:                                   # a hiccup is not an auth problem
+        await auto_client(zone_server([], {}, list_status=500)).search("q")
+    assert not isinstance(err.value, BrightDataSerpAuthError)
+    calls = {}
+    await auto_client(zone_server([{"name": "serp_api2", "type": "serp"}], calls)).search("q")   # earlier failures left nothing behind
+    assert calls["used"] == ["serp_api2"]
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_zone_is_forgotten_so_the_next_search_finds_the_new_one():
+    calls = {}
+    await auto_client(zone_server([{"name": "serp_old", "type": "serp"}], calls)).search("a")
+    with pytest.raises(BrightDataSerpAuthError, match="zone problem"):                # the zone vanishes in the control panel
+        await auto_client(zone_server([{"name": "serp_old", "type": "serp"}], calls, request_zone_status=400)).search("b")
+    calls2 = {}
+    await auto_client(zone_server([{"name": "serp_new", "type": "serp"}], calls2)).search("c")
+    assert calls2["used"] == ["serp_new"] and calls2["list"] == 1
