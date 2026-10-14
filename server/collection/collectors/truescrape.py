@@ -9,6 +9,7 @@ Verified against the live API (see tests for recorded samples):
 
 import asyncio
 import logging
+import math
 from typing import Any, Dict, List, Optional
 
 from server.collection.collectors.base import CollectorFatalError, PlatformCollector
@@ -29,7 +30,15 @@ BOT_AUTHORS = {"automoderator"}
 SEARCH_TTL = 6 * 3600       # search results go stale quickly
 COMMENTS_TTL = 24 * 3600
 PROFILE_TTL = 7 * 24 * 3600  # bios and follower counts change slowly
-MAX_INSTAGRAM_PAGES = 8     # hard stop on cursor paging (8 credits per post at most)
+POST_TTL = 6 * 3600
+LIST_TTL = 3600
+# Instagram pages hold ~15 comments for 1 credit. The page budget grows with the number requested
+# (a 500-comment target needs ~35 pages) but never beyond a hard ceiling.
+MIN_INSTAGRAM_PAGES = 8
+MAX_INSTAGRAM_PAGES = 45
+COMMENTS_PER_PAGE = 12      # conservative: plan for fewer comments per page than the ~15 usually returned
+GRID_PAGE_SIZE = 12
+MAX_GRID_PAGES = 12
 
 CAPABILITIES = {
     "reddit": {"discover": True, "comments": True},
@@ -63,6 +72,22 @@ def unified_comment_row(item: Dict[str, Any], platform: str, post_url: str, prov
         comment_id=str(item["id"]) if item.get("id") else None,
         parent_id=str(item["parentId"]) if item.get("parentId") else None,
     )
+
+
+def _post_facts(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The few fields of a unified post object that the audience feature needs."""
+    url = item.get("url")
+    if not url:
+        return None
+    count = item.get("commentCount")
+    return {
+        "post_id": str(item["id"]) if item.get("id") else url.rstrip("/").rsplit("/", 1)[-1],
+        "url": url,
+        "author_handle": (item.get("authorHandle") or "").lstrip("@").strip(),
+        "caption": (item.get("text") or item.get("title") or "")[:500],
+        "comment_count": int(count) if isinstance(count, (int, float)) else None,   # None = not exposed, not zero
+        "published_at": item.get("publishedAt"),
+    }
 
 
 class TrueScrapeBackend(MeteredMixin, PlatformCollector):
@@ -200,6 +225,39 @@ class TrueScrapeBackend(MeteredMixin, PlatformCollector):
             "url": data.get("url") or f"https://www.instagram.com/{handle}/",
         }
 
+    async def instagram_post(self, url: str) -> Optional[Dict[str, Any]]:
+        """Facts about one post (owner, caption, counts, date): 1 credit, cached for 6 hours."""
+        if self.platform != "instagram":
+            raise ValueError("instagram_post is only available on the instagram backend")
+        payload = await self._call("/v1/instagram/post", {"url": url}, "post", POST_TTL)
+        data = (payload or {}).get("data") if isinstance(payload, dict) else None
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            data = next((i for i in data["items"] if isinstance(i, dict)), None)
+        return _post_facts(data) if isinstance(data, dict) and data else None
+
+    async def instagram_user_posts(self, handle: str, max_posts: int) -> List[Dict[str, Any]]:
+        """Newest posts of one profile (12 per credit). Collab / tagged posts owned by someone else
+        are returned too: callers decide by each post's `author_handle`."""
+        if self.platform != "instagram":
+            raise ValueError("instagram_user_posts is only available on the instagram backend")
+        handle = handle.lstrip("@").strip()
+        found: Dict[str, Dict[str, Any]] = {}
+        cursor: Optional[str] = None
+        for _ in range(min(MAX_GRID_PAGES, max(1, math.ceil(max_posts / GRID_PAGE_SIZE)) + 1)):
+            params: Dict[str, Any] = {"handle": handle}
+            if cursor:
+                params["cursor"] = cursor
+            payload = await self._call("/v1/instagram/user-posts", params, "user_posts", LIST_TTL)
+            for item in _items(payload):
+                facts = _post_facts(item)
+                if facts and facts["url"] not in found:
+                    found[facts["url"]] = facts
+            pagination = (payload.get("pagination") if isinstance(payload, dict) else None) or {}
+            cursor = pagination.get("cursor")
+            if len(found) >= max_posts or not pagination.get("hasMore") or not cursor:
+                break
+        return list(found.values())[:max_posts]
+
     # ---- comments ------------------------------------------------------------------
     async def fetch_post_comments(self, post: PostCandidate, max_comments: int) -> List[CommentRow]:
         if not self.can_comments:
@@ -217,7 +275,8 @@ class TrueScrapeBackend(MeteredMixin, PlatformCollector):
     async def _instagram_comments(self, post: PostCandidate, max_comments: int) -> List[CommentRow]:
         rows: List[CommentRow] = []
         cursor: Optional[str] = None
-        for _ in range(MAX_INSTAGRAM_PAGES):
+        pages = min(MAX_INSTAGRAM_PAGES, max(MIN_INSTAGRAM_PAGES, math.ceil(max_comments / COMMENTS_PER_PAGE) + 1))
+        for _ in range(pages):
             params: Dict[str, Any] = {"url": post.url, "count": 50}
             if cursor:
                 params["cursor"] = cursor

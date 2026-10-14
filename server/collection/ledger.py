@@ -88,6 +88,10 @@ class ProviderLedger:
                     )
                     """
                 )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_api_cache_expires ON api_cache(expires_at)")
+                # Cached payloads hold raw comments (usernames + text): drop them once their TTL has passed
+                # instead of keeping them forever. Once per process is enough.
+                conn.execute("DELETE FROM api_cache WHERE expires_at<=?", (time.time(),))
             self._ready = True
         return conn
 
@@ -112,6 +116,15 @@ class ProviderLedger:
                     "VALUES (?, ?, ?, ?, ?)",
                     (key, provider, json.dumps(value, default=str), now, now + ttl),
                 )
+        finally:
+            conn.close()
+
+    def purge_expired(self) -> int:
+        """Delete cache rows past their TTL; returns how many were removed."""
+        conn = self._conn()
+        try:
+            with conn:
+                return conn.execute("DELETE FROM api_cache WHERE expires_at<=?", (time.time(),)).rowcount
         finally:
             conn.close()
 
