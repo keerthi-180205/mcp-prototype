@@ -6,6 +6,7 @@ Tracks credit consumption in real-time to avoid wasting user credits.
 """
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 import httpx
 
@@ -132,6 +133,21 @@ class SocialCrawlClient:
         finally:
             if should_close and not client.is_closed:
                 await client.aclose()
+
+    async def credit_balance(self) -> Optional[int]:
+        """Credits left on the account, at no cost.
+
+        SocialCrawl validates a request before billing it and reports `credits_remaining` in the error body,
+        so a deliberately invalid request is a free balance check. Returns None if the balance cannot be read.
+        """
+        try:
+            await self._request("GET", "/linkedin/post/comments", params={"url": "balance-check"})
+        except SocialCrawlAuthenticationError:
+            raise
+        except SocialCrawlError as exc:
+            m = re.search(r'"credits_remaining"\s*:\s*(\d+)', str(exc))
+            return int(m.group(1)) if m else (0 if "INSUFFICIENT_CREDITS" in str(exc) else None)
+        return self.last_credits_remaining
 
     # ---- Twitter / X Endpoints ----
     async def search_tweets(self, query: str, limit: int = 20, cursor: Optional[str] = None) -> Dict[str, Any]:

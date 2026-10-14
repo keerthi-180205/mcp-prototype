@@ -30,6 +30,8 @@ DEFAULT_BUDGETS = {
 }
 
 DEFAULT_CACHE_TTL = 24 * 3600
+DEFAULT_BLOCK_TTL = 1800            # transient trouble: look again in 30 minutes
+NO_CREDIT_BLOCK_TTL = 6 * 3600      # no credits / bad key does not fix itself: remember for 6 hours (or until the key changes)
 
 
 class BudgetExceeded(Exception):
@@ -114,13 +116,28 @@ class ProviderLedger:
             conn.close()
 
     # ---- blocked providers ---------------------------------------------------------
-    def set_blocked(self, provider: str, reason: str, ttl: float = 1800) -> None:
-        """Remember that a provider is unusable (no credits, bad key) so jobs stop retrying it."""
-        self.cache_put(f"blocked|{provider}", provider, {"reason": reason[:200]}, ttl)
+    def set_blocked(self, provider: str, reason: str, ttl: float = DEFAULT_BLOCK_TTL, fingerprint: Optional[str] = None) -> None:
+        """Remember that a provider is unusable (no credits, bad key) so jobs stop retrying it and the UI can say why.
+        `fingerprint` identifies the API key in use: if the key changes the block no longer applies."""
+        self.cache_put(f"blocked|{provider}", provider, {"reason": reason[:200], "fp": fingerprint}, ttl)
 
-    def blocked_reason(self, provider: str) -> Optional[str]:
+    def blocked_reason(self, provider: str, fingerprint: Optional[str] = None) -> Optional[str]:
         state = self.cache_get(f"blocked|{provider}")
-        return state["reason"] if state else None
+        if not state:
+            return None
+        if state.get("fp") and fingerprint and state["fp"] != fingerprint:
+            return None  # a different key than the one that failed
+        return state["reason"]
+
+    def clear_blocked(self, provider: str) -> bool:
+        """Forget a block, e.g. right after topping up credits. Returns True if there was one."""
+        conn = self._conn()
+        try:
+            with conn:
+                cur = conn.execute("DELETE FROM api_cache WHERE cache_key=?", (f"blocked|{provider}",))
+            return cur.rowcount > 0
+        finally:
+            conn.close()
 
     # ---- usage ---------------------------------------------------------------------
     def record_usage(

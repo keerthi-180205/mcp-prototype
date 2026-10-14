@@ -519,7 +519,10 @@ async def credit_guard_status_endpoint(request: Request):
     """Real provider usage, budgets and health, read from the persistent ledger."""
     from server.collection.ledger import get_budget, get_ledger
 
+    from server.collection.health import refresh_provider_state
+
     ledger = get_ledger()
+    balances = await refresh_provider_state(ledger)   # free: notices a top-up or an empty account without running a job
     days = 1
     try:
         days = max(1, min(30, int(request.query_params.get("days", 1))))
@@ -541,6 +544,7 @@ async def credit_guard_status_endpoint(request: Request):
             "spent_last_24h": round(ledger.spent_today(name), 2),
             "budget": get_budget(name),
         }
+    providers["socialcrawl"]["credits_remaining"] = (balances.get("socialcrawl") or {}).get("balance")
     providers["brightdata"]["serp_zone_configured"] = bool(os.getenv("BRIGHTDATA_SERP_ZONE"))
     providers["brightdata"]["note"] = ("SERP discovery for X / Instagram / LinkedIn and the therapist finder; "
                                        "the SERP zone is detected automatically unless BRIGHTDATA_SERP_ZONE pins one")
@@ -674,6 +678,16 @@ async def professionals_export_endpoint(request: Request):
                         headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
+async def provider_unblock_endpoint(request: Request):
+    """Forget a provider's remembered "no credits / bad key" state, e.g. right after topping up."""
+    from server.collection.ledger import get_ledger
+
+    name = request.path_params["name"].lower()
+    if name not in ("truescrape", "socialcrawl", "apify", "brightdata"):
+        return JSONResponse({"status": "error", "message": f"unknown provider {name!r}"}, status_code=404)
+    return JSONResponse({"status": "ok", "provider": name, "was_blocked": get_ledger().clear_blocked(name)})
+
+
 async def logo_endpoint(request: Request):
     """Serve SocialRadar AI logo."""
     dist_logo = os.path.join(WORKSPACE_ROOT, "web_ui", "dist", "logo.png")
@@ -695,6 +709,7 @@ routes = [
     Route("/api/collect/{job_id}/export", endpoint=collect_export_endpoint, methods=["GET"]),
     Route("/api/credit-guard/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
     Route("/api/providers/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
+    Route("/api/providers/{name}/unblock", endpoint=_guarded(provider_unblock_endpoint), methods=["POST"]),
     Route("/api/assistant/message", endpoint=assistant_message_endpoint, methods=["POST"]),
     Route("/api/professionals/runs", endpoint=_guarded(professionals_start_endpoint), methods=["POST"]),
     Route("/api/professionals/runs/{run_id}", endpoint=_guarded(professionals_run_endpoint), methods=["GET"]),

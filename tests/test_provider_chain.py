@@ -373,3 +373,117 @@ async def test_x_collector_raises_when_every_search_errors(monkeypatch):
     monkeypatch.setattr(xc, "run_cli", boom)
     with pytest.raises(CliError, match="X searches failed"):
         await xc.XCollector(binary="twitter").discover(QueryPlan(topic="t", keywords=["t"]), 10)
+
+
+# ---- a "no credits" block is remembered for hours, forgotten when the key changes, and can be cleared -----------------
+def ttl_left(ledger, provider):
+    import sqlite3
+    conn = sqlite3.connect(ledger.db_path)
+    row = conn.execute("SELECT expires_at - created_at FROM api_cache WHERE cache_key=?", (f"blocked|{provider}",)).fetchone()
+    return row[0] if row else None
+
+
+@pytest.mark.asyncio
+async def test_no_credits_is_remembered_for_hours_but_a_rate_limit_only_briefly(ledger, monkeypatch):
+    be = SocialCrawlBackend("linkedin", client=FakeSC(error=SocialCrawlError("SocialCrawl API error (402): INSUFFICIENT_CREDITS")), ledger=ledger)
+    with pytest.raises(CollectorFatalError):
+        await be.fetch_post_comments(post("https://li.test/1", platform="linkedin"), 5)
+    assert 5.9 * 3600 < ttl_left(ledger, "socialcrawl") <= 6 * 3600 and not be.is_available()
+
+    from server.providers.socialcrawl.client import SocialCrawlRateLimitError
+    limited = SocialCrawlBackend("x", client=FakeSC(error=SocialCrawlRateLimitError("slow down")), ledger=ProviderLedger(ledger.db_path))
+    ledger.clear_blocked("socialcrawl")
+    monkeypatch.setattr(FakeSC, "get_tweet_replies", lambda self, tweet_url, cursor=None: self.get_linkedin_comments(tweet_url, cursor), raising=False)
+    with pytest.raises(CollectorFatalError):
+        await limited.fetch_post_comments(post("https://x.test/1", platform="x"), 5)
+    assert ttl_left(ledger, "socialcrawl") <= 1800
+
+
+@pytest.mark.asyncio
+async def test_replacing_the_api_key_lifts_the_block_and_clear_blocked_does_too(ledger):
+    class KeyedSC(FakeSC):
+        def __init__(self, key, **kw):
+            super().__init__(**kw)
+            self._api_key = key
+
+    err = SocialCrawlError("SocialCrawl API error (402): INSUFFICIENT_CREDITS")
+    old = SocialCrawlBackend("linkedin", client=KeyedSC("old-key", error=err), ledger=ledger)
+    with pytest.raises(CollectorFatalError):
+        await old.fetch_post_comments(post("https://li.test/1", platform="linkedin"), 5)
+    assert not old.is_available()
+    assert SocialCrawlBackend("linkedin", client=KeyedSC("new-key"), ledger=ledger).is_available()     # different key: tried again
+    assert not SocialCrawlBackend("linkedin", client=KeyedSC("old-key"), ledger=ledger).is_available()  # same key: still blocked
+    assert ledger.clear_blocked("socialcrawl") is True and ledger.clear_blocked("socialcrawl") is False
+    assert SocialCrawlBackend("linkedin", client=KeyedSC("old-key"), ledger=ledger).is_available()      # topped up and cleared
+
+
+def test_the_availability_panel_shows_a_blocked_provider_with_its_reason(monkeypatch):
+    from server.chat.assistant import get_platforms_availability
+    from server.collection.ledger import get_ledger
+    from server.config import get_settings
+
+    monkeypatch.setenv("SOCIALCRAWL_API_KEY", "k")
+    get_settings(reload=True)
+    assert get_platforms_availability()["linkedin"]["available"] is True          # configured, nothing known yet
+    get_ledger().set_blocked("socialcrawl", "SocialCrawl has no credits left (HTTP 402)", 3600)
+    linkedin = get_platforms_availability()["linkedin"]
+    assert linkedin["available"] is False and "no credits" in linkedin["unavailable_providers"]["socialcrawl"]
+
+
+def test_unblock_endpoint_and_cli(monkeypatch, capsys):
+    from starlette.testclient import TestClient
+    from scripts import providers
+    from server.collection.ledger import get_ledger
+    from web.server import app
+
+    get_ledger().set_blocked("socialcrawl", "no credits", 3600)
+    with TestClient(app) as client:
+        assert client.post("/api/providers/nope/unblock").status_code == 404
+        assert client.post("/api/providers/socialcrawl/unblock").json() == {"status": "ok", "provider": "socialcrawl", "was_blocked": True}
+        assert client.post("/api/providers/socialcrawl/unblock").json()["was_blocked"] is False
+    get_ledger().set_blocked("truescrape", "out of credits", 3600)
+    assert providers.unblock("truescrape") == 0 and "block cleared" in capsys.readouterr().out
+    assert providers.status() == 0 and "Credits in the last 24h" in capsys.readouterr().out
+
+
+# ---- the balance is read for free, so the panel is truthful before any job fails -----------------------------------
+def sc_client(handler):
+    import httpx
+    from server.providers.socialcrawl.client import SocialCrawlClient
+    return SocialCrawlClient(api_key="key", client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+
+
+@pytest.mark.asyncio
+async def test_credit_balance_is_read_from_the_validation_error_body():
+    import httpx
+    body = '{"success":false,"error":{"type":"INVALID_REQUEST","status":400},"credits_used":0,"credits_remaining":37}'
+    assert await sc_client(lambda r: httpx.Response(400, text=body)).credit_balance() == 37
+    assert await sc_client(lambda r: httpx.Response(402, text='{"error":{"type":"INSUFFICIENT_CREDITS"}}')).credit_balance() == 0
+    assert await sc_client(lambda r: httpx.Response(500, text="boom")).credit_balance() is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_blocks_an_empty_account_and_unblocks_after_a_top_up(ledger):
+    import httpx
+    from server.collection.health import refresh_provider_state
+    state = {"credits": 0}
+
+    def handler(request):
+        return httpx.Response(400, text='{"credits_remaining": %d}' % state["credits"])
+
+    client = sc_client(handler)
+    assert (await refresh_provider_state(ledger, client))["socialcrawl"]["blocked"] is True
+    assert "no credits" in ledger.blocked_reason("socialcrawl")
+    state["credits"] = 120                                                       # the account is topped up
+    assert (await refresh_provider_state(ledger, client))["socialcrawl"] == {"configured": True, "balance": 120, "blocked": False}
+    assert ledger.blocked_reason("socialcrawl") is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_does_nothing_without_a_key_and_survives_outages(ledger):
+    import httpx
+    from server.collection.health import refresh_provider_state
+    from server.providers.socialcrawl.client import SocialCrawlClient
+    assert (await refresh_provider_state(ledger, SocialCrawlClient(api_key="")))["socialcrawl"] == {"configured": False}
+    out = await refresh_provider_state(ledger, sc_client(lambda r: httpx.Response(500, text="down")))
+    assert out["socialcrawl"]["balance"] is None and ledger.blocked_reason("socialcrawl") is None   # an outage is not "no credits"
