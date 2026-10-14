@@ -30,6 +30,7 @@ import httpx  # noqa: E402
 from server.collection.collectors.base import CollectorFatalError  # noqa: E402
 from server.collection.collectors.serp import SerpSearch  # noqa: E402
 from server.collection.ledger import get_budget, get_ledger  # noqa: E402
+from server.csv_safe import safe_row  # noqa: E402
 from server.providers.brightdata.serp import BrightDataSerpError, matches_site  # noqa: E402
 
 RECENT = {"day": "qdr:d", "week": "qdr:w", "month": "qdr:m", "year": "qdr:y"}
@@ -107,7 +108,7 @@ async def run(args: argparse.Namespace) -> int:
         with open(path, "w", newline="", encoding="utf-8-sig") as fh:
             writer = csv.DictWriter(fh, fieldnames=FIELDS)
             writer.writeheader()
-            writer.writerows(rows)
+            writer.writerows(safe_row(r) for r in rows)
         print(f"saved {path}")
     return 0 if rows else 2
 

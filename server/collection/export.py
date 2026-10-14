@@ -5,6 +5,7 @@ import json
 import os
 from typing import Dict, Optional
 
+from server.csv_safe import safe_row
 from server.storage.comments import iter_all_comments
 
 import datetime
@@ -46,7 +47,7 @@ def export_job(
             writer = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
             writer.writeheader()
             for row in iter_all_comments(job_id, db_path=db_path):
-                writer.writerow(row)
+                writer.writerow(safe_row(row))
                 count += 1
     else:
         with open(path, "w", encoding="utf-8") as fh:
@@ -127,7 +128,7 @@ def save_scraped_comments_to_csv(
             writer = csv.DictWriter(fh, fieldnames=SCRAPED_CSV_FIELDS, extrasaction="ignore")
             writer.writeheader()
             for r in normalized_rows:
-                writer.writerow(r)
+                writer.writerow(safe_row(r))
 
     # Persist into database so comments are searchable, exportable by job, and deduplicated
     db_job_id = job_id or f"job_chat_{now_str}"
@@ -165,7 +166,7 @@ def export_all_scraped_comments(out_dir: Optional[str] = None, db_path: Optional
         writer = csv.DictWriter(fh, fieldnames=FIELDS, extrasaction="ignore")
         writer.writeheader()
         for row in iter_all_comments("all", db_path=db_path):
-            writer.writerow(row)
+            writer.writerow(safe_row(row))
             count += 1
 
     return {"path": path, "filename": "all_scraped_comments.csv", "rows": count}

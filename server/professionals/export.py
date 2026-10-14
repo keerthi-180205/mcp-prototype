@@ -6,6 +6,7 @@ import json
 import os
 from typing import Any, Dict, Optional, Sequence
 
+from server.csv_safe import safe_row
 from server.storage import professionals as store
 
 FIELDS = [
@@ -42,7 +43,7 @@ def export_professionals(
         with open(path, "w", newline="", encoding="utf-8-sig") as fh:  # BOM so Excel reads non-Latin names
             writer = csv.DictWriter(fh, fieldnames=FIELDS, extrasaction="ignore")
             writer.writeheader()
-            writer.writerows(rows)
+            writer.writerows(safe_row(r) for r in rows)
     else:
         with open(path, "w", encoding="utf-8") as fh:
             json.dump([{k: r.get(k) for k in FIELDS + ["channels"]} for r in rows], fh, ensure_ascii=False, indent=2)
