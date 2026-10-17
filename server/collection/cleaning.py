@@ -49,7 +49,12 @@ def clean_comments(
             continue
         if is_creator_comment(row, post):
             continue
-        row = row.model_copy(update={"comment": text, "username": (row.username or "").strip().lstrip("@")})
+        uname = (row.username or "").strip().lstrip("@")
+        if not uname and row.user_id:
+            uname = f"user_{row.user_id}"
+        elif not uname:
+            uname = "anonymous"
+        row = row.model_copy(update={"comment": text, "username": uname})
         key = dedupe_key(row)
         if key in seen:
             continue

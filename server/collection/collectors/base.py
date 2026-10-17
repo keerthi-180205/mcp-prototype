@@ -13,6 +13,12 @@ class CollectorFatalError(Exception):
 
 class PlatformCollector(ABC):
     platform: str
+    # Name of the data source (yt-dlp, rdt-cli, truescrape, apify, ...). Stored on every row.
+    provider: str = ""
+    # What this source can do. A backend that cannot discover posts (e.g. TrueScrape on Instagram)
+    # still takes part in the chain for the operation it does support.
+    can_discover: bool = True
+    can_comments: bool = True
     # Max posts fetched together in one harvesting step (Apify sends many URLs in a single run).
     batch_size: int = 1
     # Posts fetched concurrently inside a batch for CLI-based collectors.

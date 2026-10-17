@@ -168,6 +168,10 @@ class CollectionJobManager:
             usage = getattr(collector, "usage", None)
             if callable(usage):
                 job.usage[platform] = usage()
+            # Why a platform fell back to another provider (switched-off providers, empty searches)
+            for note in getattr(collector, "notes", []):
+                if note not in progress.notes:
+                    progress.notes.append(note)
             self._persist(job)
 
     # ---- queries -------------------------------------------------------------------

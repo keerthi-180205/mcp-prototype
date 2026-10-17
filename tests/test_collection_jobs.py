@@ -72,7 +72,7 @@ async def test_job_runs_all_platforms_concurrently_and_stores_results(tmp_path):
     assert res["total_comments"] >= 400 and len(res["rows"]) == 10 and res["total_pages"] > 1
     assert set(res["top_comments"]) == {"instagram", "youtube", "reddit", "x"} and not res["below_target"]
     assert all(r["username"] != "creator" for r in res["rows"])  # creator comments removed
-    assert set(res["rows"][0]) == {"platform", "username", "user_id", "comment", "likes", "created_at", "post_url"}
+    assert set(res["rows"][0]) >= {"platform", "username", "user_id", "comment", "likes", "created_at", "post_url"}
     only = m.results(started["job_id"], platform="twitter", page_size=5)  # alias for x
     assert {r["platform"] for r in only["rows"]} == {"x"}
 

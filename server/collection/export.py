@@ -5,6 +5,7 @@ import json
 import os
 from typing import Dict, Optional
 
+from server.csv_safe import safe_row
 from server.storage.comments import iter_all_comments
 
 import datetime
@@ -15,6 +16,8 @@ from server.collection.models import CommentRow
 from server.storage.comments import create_job, iter_all_comments, save_comments
 
 FIELDS = ["platform", "username", "user_id", "comment", "likes", "created_at", "post_url"]
+# Optional provenance columns: which provider served the row, thread ids and collection time.
+FIELDS_FULL = FIELDS + ["provider", "comment_id", "parent_id", "collected_at"]
 SCRAPED_CSV_FIELDS = ["platform", "username", "user_id", "comment", "likes", "created_at", "post_url", "category", "topic"]
 
 DEFAULT_EXPORT_DIR = os.path.join(
@@ -22,8 +25,14 @@ DEFAULT_EXPORT_DIR = os.path.join(
 )
 
 
-def export_job(job_id: str, fmt: str = "csv", out_dir: Optional[str] = None, db_path: Optional[str] = None) -> Dict[str, object]:
-    """Write all rows of a job to `<out_dir>/<job_id>.<fmt>` and return path + row count."""
+def export_job(
+    job_id: str, fmt: str = "csv", out_dir: Optional[str] = None, db_path: Optional[str] = None, full: bool = False
+) -> Dict[str, object]:
+    """Write all rows of a job to `<out_dir>/<job_id>.<fmt>` and return path + row count.
+
+    `full=True` adds the provenance columns (provider, comment_id, parent_id, collected_at).
+    """
+    fields = FIELDS_FULL if full else FIELDS
     fmt = fmt.lower().strip()
     if fmt not in ("csv", "json"):
         raise ValueError("format must be 'csv' or 'json'")
@@ -35,16 +44,16 @@ def export_job(job_id: str, fmt: str = "csv", out_dir: Optional[str] = None, db_
     if fmt == "csv":
         # utf-8-sig so Excel opens emoji / non-Latin text correctly
         with open(path, "w", newline="", encoding="utf-8-sig") as fh:
-            writer = csv.DictWriter(fh, fieldnames=FIELDS, extrasaction="ignore")
+            writer = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
             writer.writeheader()
             for row in iter_all_comments(job_id, db_path=db_path):
-                writer.writerow(row)
+                writer.writerow(safe_row(row))
                 count += 1
     else:
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("[")
             for row in iter_all_comments(job_id, db_path=db_path):
-                fh.write(("," if count else "") + "\n  " + json.dumps({k: row.get(k) for k in FIELDS}, ensure_ascii=False))
+                fh.write(("," if count else "") + "\n  " + json.dumps({k: row.get(k) for k in fields}, ensure_ascii=False))
                 count += 1
             fh.write("\n]\n")
     return {"path": path, "format": fmt, "rows": count}
@@ -119,7 +128,7 @@ def save_scraped_comments_to_csv(
             writer = csv.DictWriter(fh, fieldnames=SCRAPED_CSV_FIELDS, extrasaction="ignore")
             writer.writeheader()
             for r in normalized_rows:
-                writer.writerow(r)
+                writer.writerow(safe_row(r))
 
     # Persist into database so comments are searchable, exportable by job, and deduplicated
     db_job_id = job_id or f"job_chat_{now_str}"
@@ -157,7 +166,7 @@ def export_all_scraped_comments(out_dir: Optional[str] = None, db_path: Optional
         writer = csv.DictWriter(fh, fieldnames=FIELDS, extrasaction="ignore")
         writer.writeheader()
         for row in iter_all_comments("all", db_path=db_path):
-            writer.writerow(row)
+            writer.writerow(safe_row(row))
             count += 1
 
     return {"path": path, "filename": "all_scraped_comments.csv", "rows": count}

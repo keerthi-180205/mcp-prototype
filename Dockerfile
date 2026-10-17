@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copy application source, scripts, tests, and documentation
 COPY server/ ./server/
+COPY web/ ./web/
 COPY scripts/ ./scripts/
 COPY tests/ ./tests/
 COPY README.md .
@@ -30,5 +31,8 @@ RUN useradd --create-home --shell /bin/bash appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# MCP server operates over standard I/O (stdio) transport
+# SQLite database and exports live here: mount a volume so they survive container restarts
+VOLUME ["/app/data"]
+
+# Default: MCP server over standard I/O (stdio). The web app overrides this command (see docker-compose.yml)
 CMD ["python", "-m", "server.server"]

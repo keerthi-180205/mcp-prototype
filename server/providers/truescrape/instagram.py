@@ -173,6 +173,11 @@ class TrueScrapeInstagramProvider:
             logger.warning("[TRUESCRAPE_INSTAGRAM] Error fetching comments: %s", e)
             return []
 
+        if isinstance(res, dict) and res.get("success") is False:
+            err = res.get("error") or {}
+            logger.warning("[TRUESCRAPE_INSTAGRAM] API error for %s: %s", post_url, err.get("message"))
+            return []
+
         raw_items = []
         if isinstance(res, dict):
             data = res.get("data")
@@ -185,18 +190,26 @@ class TrueScrapeInstagramProvider:
         for item in raw_items[:safe_limit]:
             if not isinstance(item, dict):
                 continue
+            author_id = item.get("authorId") or item.get("userId") or item.get("id")
+            handle = (
+                item.get("authorHandle")
+                or item.get("username")
+                or item.get("ownerUsername")
+                or item.get("authorName")
+                or (f"user_{author_id}" if author_id else None)
+            )
             formatted = {
-                "id": item.get("id"),
-                "comment_id": item.get("id"),
-                "text": item.get("text") or "",
+                "id": item.get("id") or item.get("comment_id"),
+                "comment_id": item.get("id") or item.get("comment_id"),
+                "text": item.get("text") or item.get("comment") or "",
                 "likesCount": item.get("likeCount", 0),
                 "replyCount": item.get("replyCount", 0),
                 "timestamp": item.get("createdAt") or item.get("publishedAt"),
                 "user": {
-                    "id": item.get("authorId"),
-                    "username": item.get("authorHandle"),
-                    "name": item.get("authorName"),
-                    "profile_pic_url": item.get("authorAvatarUrl"),
+                    "id": author_id,
+                    "username": handle,
+                    "name": item.get("authorName") or item.get("name") or handle,
+                    "profile_pic_url": item.get("authorAvatarUrl") or item.get("profilePicUrl") or item.get("avatarUrl"),
                 },
                 "raw": item,
             }

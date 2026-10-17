@@ -11,6 +11,7 @@ Supports ANY subject/topic:
 """
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -45,6 +46,12 @@ from server.storage.sqlite import get_social_records, get_social_stats, save_soc
 from server.collection.jobs import CollectionJobManager, JobError
 from server.collection.export import export_job
 from server.chat.assistant import handle_assistant_message, get_platforms_availability
+from server.audience import queue as care_queue
+from server.professionals import api as pro_api
+from server.professionals.export import export_professionals
+from server.professionals.runs import ProfessionalRunManager, RunError
+from server.storage import audience as audience_store
+from server.storage import professionals as pro_store
 
 load_dotenv()
 logger = logging.getLogger("mcp_server.web")
@@ -282,6 +289,7 @@ async def chat_endpoint(request: Request):
         "description": profile_results.get("description", description),
         "platform": reached_str,
         "platforms_reached": reached_names,
+        "platform_status": profile_results.get("platform_status", {}),
         "chatbot_message": chatbot_message,
         "summary_message": chatbot_message,
         "ai_response_plan": profile_results.get("ai_response_plan", ""),
@@ -472,7 +480,8 @@ async def collect_export_endpoint(request: Request):
     mgr = _get_manager(request)
     try:
         mgr.status(job_id)  # Validate job exists
-        res = export_job(job_id, fmt=fmt, db_path=mgr.db_path)
+        full = request.query_params.get("full", "").lower() in ("1", "true", "yes")
+        res = export_job(job_id, fmt=fmt, db_path=mgr.db_path, full=full)
         file_path = str(res["path"])
         filename = f"{job_id}.{fmt}"
         media_type = "text/csv; charset=utf-8" if fmt == "csv" else "application/json"
@@ -509,45 +518,176 @@ async def assistant_message_endpoint(request: Request):
 
 
 async def credit_guard_status_endpoint(request: Request):
-    """Retrieve Credit-Guard routing matrix, savings, and credit ledger."""
-    from server.collection.credit_guard import get_credit_guard
-    from server.providers.socialcrawl.client import SocialCrawlClient
-    from server.providers.brightdata.client import BrightDataClient
+    """Real provider usage, budgets and health, read from the persistent ledger."""
+    from server.collection.ledger import get_budget, get_ledger
 
-    guard = get_credit_guard()
-    summary = guard.get_summary()
+    from server.collection.health import refresh_provider_state
 
-    sc_client = SocialCrawlClient()
-    bd_client = BrightDataClient()
+    ledger = get_ledger()
+    balances = await refresh_provider_state(ledger)   # free: notices a top-up or an empty account without running a job
+    days = 1
+    try:
+        days = max(1, min(30, int(request.query_params.get("days", 1))))
+    except (TypeError, ValueError):
+        pass
+    usage = ledger.summary(days=days)
 
-    bd_status = await bd_client.get_status()
+    env_keys = {
+        "truescrape": "TRUESCRAPE_API_KEY",
+        "socialcrawl": "SOCIALCRAWL_API_KEY",
+        "apify": "APIFY_API_TOKEN",
+        "brightdata": "BRIGHTDATA_API_KEY",
+    }
+    providers = {}
+    for name, env in env_keys.items():
+        providers[name] = {
+            "configured": bool(os.getenv(env)),
+            "blocked": ledger.blocked_reason(name),  # e.g. "SocialCrawl has no credits left"
+            "spent_last_24h": round(ledger.spent_today(name), 2),
+            "budget": get_budget(name),
+        }
+    providers["socialcrawl"]["credits_remaining"] = (balances.get("socialcrawl") or {}).get("balance")
+    providers["brightdata"]["serp_zone_configured"] = bool(os.getenv("BRIGHTDATA_SERP_ZONE"))
+    providers["brightdata"]["note"] = ("SERP discovery for X / Instagram / LinkedIn and the therapist finder; "
+                                       "the SERP zone is detected automatically unless BRIGHTDATA_SERP_ZONE pins one")
 
     return JSONResponse({
         "status": "success",
-        "credit_guard": summary,
-        "providers_health": {
-            "socialcrawl": {
-                "configured": sc_client.is_configured,
-                "credits_remaining": sc_client.last_credits_remaining or 91,
-                "credits_used_session": sc_client.total_credits_used,
-            },
-            "brightdata": {
-                "configured": bd_client.is_configured,
-                "status": bd_status.get("status"),
-                "customer": bd_status.get("customer"),
-                "can_make_requests": bd_status.get("can_make_requests", False),
-                "auth_fail_reason": bd_status.get("auth_fail_reason"),
-            },
-            "truescrape": {
-                "configured": bool(os.getenv("TRUESCRAPE_API_KEY")),
-            },
-            "agent_reach_yt_dlp": {
-                "configured": True,
-                "tier": "free",
-                "cost_usd": 0.0,
-            },
-        },
+        "usage": usage,
+        "providers": providers,
+        "platforms": get_platforms_availability(),
     })
+
+
+# ---------------------------------------------------------------------------
+# Therapist / psychiatrist finder (review queue). Nothing is exported until a person approves it.
+# ---------------------------------------------------------------------------
+
+professionals_manager = ProfessionalRunManager()
+
+
+def _guarded(endpoint):
+    """These routes expose contact details and spend search credits. If PROFESSIONALS_API_TOKEN is set, they
+    require `Authorization: Bearer <token>`; without it they behave like the other local-only routes."""
+    async def wrapper(request: Request):
+        token = os.getenv("PROFESSIONALS_API_TOKEN")
+        if token and not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}"):
+            return JSONResponse({"status": "error", "message": "missing or wrong bearer token"}, status_code=401)
+        return await endpoint(request)
+    return wrapper
+_PRO_START_FIELDS = ("city", "specialties", "focus", "platforms", "pages", "country", "max_serp_credits",
+                     "max_profile_lookups", "max_sites")
+
+
+def _pro_manager(request: Request) -> ProfessionalRunManager:
+    return getattr(request.app.state, "professionals_manager", professionals_manager)
+
+
+def _err(message: str, status: int) -> JSONResponse:
+    return JSONResponse({"status": "error", "message": message}, status_code=status)
+
+
+async def professionals_start_endpoint(request: Request):
+    """Start a background search: {city, specialties?, focus?, platforms?, pages?, max_serp_credits?, ...}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        return _err("body must be a JSON object", 400)
+    try:
+        return JSONResponse(_pro_manager(request).start(**{k: v for k, v in body.items() if k in _PRO_START_FIELDS}))
+    except (RunError, TypeError) as exc:
+        return _err(str(exc), 400)
+
+
+async def professionals_run_endpoint(request: Request):
+    try:
+        return JSONResponse(_pro_manager(request).status(request.path_params["run_id"]))
+    except RunError as exc:
+        return _err(str(exc), 404)
+
+
+async def professionals_list_endpoint(request: Request):
+    q = request.query_params
+
+    def num(name: str, default, cast):
+        try:
+            return cast(q.get(name, default))
+        except (TypeError, ValueError):
+            return default
+
+    flagged = q.get("needs_review")
+    try:
+        return JSONResponse(pro_api.list_view(
+            db_path=_pro_manager(request).db_path, status=q.get("status", "new"), role=q.get("role"),
+            entity_type=q.get("entity_type"), city=q.get("city"), min_confidence=num("min_confidence", 0.0, float),
+            has_channel=q.get("has_channel"), needs_review=None if flagged is None else flagged.lower() in ("1", "true", "yes"),
+            q=q.get("q"), sort=q.get("sort", "fit_score"), page=num("page", 1, int), page_size=num("page_size", 25, int)))
+    except ValueError as exc:
+        return _err(str(exc), 400)
+
+
+async def professionals_detail_endpoint(request: Request):
+    item = pro_api.detail_view(request.path_params["pro_id"], _pro_manager(request).db_path)
+    return JSONResponse(item) if item else _err("unknown professional", 404)
+
+
+async def professionals_review_endpoint(request: Request):
+    """Record a human decision: {decision: approve|reject|dnc|new, note?, licence_verified?: true|false|null}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    kwargs = {"licence_verified": body["licence_verified"]} if isinstance(body, dict) and "licence_verified" in body else {}
+    try:
+        item = pro_api.review_view(request.path_params["pro_id"], (body or {}).get("decision", ""), (body or {}).get("note", ""),
+                                   db_path=_pro_manager(request).db_path, **kwargs)
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    return JSONResponse(item) if item else _err("unknown professional", 404)
+
+
+async def professionals_suppress_endpoint(request: Request):
+    """Add to the do-not-contact list: {kind: email|phone|domain|profile_url, value, reason?}."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        value = pro_store.add_suppression((body or {}).get("kind", ""), (body or {}).get("value", ""),
+                                          (body or {}).get("reason", ""), _pro_manager(request).db_path)
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    return JSONResponse({"status": "ok", "kind": body["kind"], "value": value})
+
+
+async def professionals_suppression_list_endpoint(request: Request):
+    return JSONResponse({"items": pro_store.list_suppression(_pro_manager(request).db_path)})
+
+
+async def professionals_export_endpoint(request: Request):
+    """Download approved professionals (do-not-contact and suppressed people are never included)."""
+    status = request.query_params.get("status", "approved")
+    fmt = request.query_params.get("format", "csv")
+    try:
+        result = export_professionals([status], fmt, db_path=_pro_manager(request).db_path)
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    media = "text/csv; charset=utf-8" if fmt == "csv" else "application/json"
+    name = os.path.basename(result["path"])
+    return FileResponse(path=result["path"], media_type=media, filename=name,
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+async def provider_unblock_endpoint(request: Request):
+    """Forget a provider's remembered "no credits / bad key" state, e.g. right after topping up."""
+    from server.collection.ledger import get_ledger
+
+    name = request.path_params["name"].lower()
+    if name not in ("truescrape", "socialcrawl", "apify", "brightdata"):
+        return JSONResponse({"status": "error", "message": f"unknown provider {name!r}"}, status_code=404)
+    return JSONResponse({"status": "ok", "provider": name, "was_blocked": get_ledger().clear_blocked(name)})
 
 
 async def logo_endpoint(request: Request):
@@ -559,6 +699,53 @@ async def logo_endpoint(request: Request):
 
 
 # Starlette app configuration
+# ---------------------------------------------------------------------------
+# Care queue: comments on MMTF's own posts that need a person. These routes return what people wrote, so they are
+# DISABLED unless AUDIENCE_API_TOKEN is set (default deny), unlike the finder routes above.
+# ---------------------------------------------------------------------------
+
+def _guarded_strict(endpoint):
+    async def wrapper(request: Request):
+        token = os.getenv("AUDIENCE_API_TOKEN")
+        if not token:
+            return JSONResponse({"status": "error", "message": "care-queue routes are disabled: set AUDIENCE_API_TOKEN to enable them"}, status_code=403)
+        if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {token}"):
+            return JSONResponse({"status": "error", "message": "missing or wrong bearer token"}, status_code=401)
+        return await endpoint(request)
+    return wrapper
+
+
+async def care_queue_endpoint(request: Request):
+    q = request.query_params
+    try:
+        limit = int(q.get("limit", "50"))
+    except ValueError:
+        return _err("limit must be a number", 400)
+    labels = [l for l in q.getlist("label") if l] or None
+    statuses = [s for s in q.getlist("status") if s] or ["new"]
+    items = care_queue.queue_items(statuses, labels, limit, q.get("platform"), q.get("account"), with_text=True)
+    return JSONResponse({"status": "ok", "count": len(items), "items": items})
+
+
+async def care_stats_endpoint(request: Request):
+    return JSONResponse({"status": "ok", **audience_store.stats()})
+
+
+async def care_handle_endpoint(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        return _err("body must be a JSON object", 400)
+    try:
+        key = audience_store.resolve_key(request.path_params["key"])
+        done = care_queue.handle_item(key, str(body.get("status", "")), str(body.get("handled_by", "")), str(body.get("note", "")))
+    except ValueError as exc:
+        return _err(str(exc), 400)
+    return JSONResponse({"status": "ok", "item": done}) if done else _err("item not found", 404)
+
+
 routes = [
     Route("/", endpoint=index, methods=["GET"]),
     Route("/logo.png", endpoint=logo_endpoint, methods=["GET"]),
@@ -570,7 +757,20 @@ routes = [
     Route("/api/collect/{job_id}/results", endpoint=collect_results_endpoint, methods=["GET"]),
     Route("/api/collect/{job_id}/export", endpoint=collect_export_endpoint, methods=["GET"]),
     Route("/api/credit-guard/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
+    Route("/api/providers/status", endpoint=credit_guard_status_endpoint, methods=["GET"]),
+    Route("/api/providers/{name}/unblock", endpoint=_guarded(provider_unblock_endpoint), methods=["POST"]),
     Route("/api/assistant/message", endpoint=assistant_message_endpoint, methods=["POST"]),
+    Route("/api/care/queue", endpoint=_guarded_strict(care_queue_endpoint), methods=["GET"]),
+    Route("/api/care/stats", endpoint=_guarded_strict(care_stats_endpoint), methods=["GET"]),
+    Route("/api/care/{key}/handle", endpoint=_guarded_strict(care_handle_endpoint), methods=["POST"]),
+    Route("/api/professionals/runs", endpoint=_guarded(professionals_start_endpoint), methods=["POST"]),
+    Route("/api/professionals/runs/{run_id}", endpoint=_guarded(professionals_run_endpoint), methods=["GET"]),
+    Route("/api/professionals/export", endpoint=_guarded(professionals_export_endpoint), methods=["GET"]),
+    Route("/api/professionals/suppression", endpoint=_guarded(professionals_suppression_list_endpoint), methods=["GET"]),
+    Route("/api/professionals/suppress", endpoint=_guarded(professionals_suppress_endpoint), methods=["POST"]),
+    Route("/api/professionals", endpoint=_guarded(professionals_list_endpoint), methods=["GET"]),
+    Route("/api/professionals/{pro_id}/review", endpoint=_guarded(professionals_review_endpoint), methods=["POST"]),
+    Route("/api/professionals/{pro_id}", endpoint=_guarded(professionals_detail_endpoint), methods=["GET"]),
     Route("/api/chat", endpoint=chat_endpoint, methods=["POST"]),
     Route("/api/chat/export", endpoint=chat_export_endpoint, methods=["GET"]),
     Route("/api/export/all", endpoint=chat_export_endpoint, methods=["GET"]),

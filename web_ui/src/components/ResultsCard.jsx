@@ -149,7 +149,7 @@ export default function ResultsCard({ card }) {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-muted)', marginBottom: '4px' }}>
                       <span style={{ fontWeight: 600, color: '#ececec', textTransform: 'uppercase' }}>
-                        {c.platform || plat} • {c.username || c.user_id}
+                        {c.platform || plat} • {c.username ? `@${c.username.replace(/^@/, '')}` : (c.user_id ? `user_${c.user_id}` : 'Anonymous')}
                       </span>
                       <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Heart className="w-3 h-3" /> {c.likes || 0}
@@ -225,7 +225,7 @@ export default function ResultsCard({ card }) {
                     {row.platform}
                   </td>
                   <td className="td-user">
-                    {row.username || row.user_id}
+                    {row.username ? `@${row.username.replace(/^@/, '')}` : (row.user_id ? `user_${row.user_id}` : 'Anonymous')}
                   </td>
                   <td className="td-comment">
                     {row.comment}

@@ -13,3 +13,24 @@ services:
     environment:
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/app/data
+
+  # Chat web app + REST API on http://localhost:8080
+  # (build the React UI first with `cd web_ui && npm install && npm run build`; without it the
+  #  legacy static page is served)
+  mmtf-web:
+    image: mmtf-mcp:latest
+    container_name: mmtf-web
+    restart: unless-stopped
+    command: ["python", "web/server.py"]
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - HOST=0.0.0.0
+      - PORT=8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data

@@ -244,7 +244,7 @@ The server listens on standard input/output (`stdio`) for Model Context Protocol
 
 ## Testing
 
-Run the full automated test suite (110 offline tests covering all tools, connectors, validation, prompts, Gemini client, configuration, logging, and resilience):
+Run the full automated test suite (hermetic: `tests/conftest.py` blanks all API keys and isolates the database, so it never spends credits; 286 offline tests covering all tools, connectors, validation, prompts, Gemini client, configuration, logging, and resilience):
 
 ```bash
 pytest
@@ -287,12 +287,51 @@ platform, opens their comment sections and collects the **commenters** (not the 
 user id and comment text. It keeps moving to the next-best post until `target_comments` per platform
 (default 500) is reached or a limit (max posts, max time, Apify budget) is hit.
 
-| Platform | Backend | Credentials |
+Each platform is served by a **provider chain**: free tools first, then cheap REST APIs, then expensive
+batch actors. The chain works per operation (finding posts vs. reading comments) because providers are not
+equally capable. A provider that fails, runs out of credits or hits its budget is switched off for the job
+and the next one takes over; every stored row records which provider served it.
+
+| Platform | Find posts | Read comments |
 |---|---|---|
-| Instagram | Apify (`instagram-scraper` + `instagram-comment-scraper`) | `APIFY_API_TOKEN` |
-| YouTube | `yt-dlp` (no login) | - |
-| Reddit | `rdt-cli` | `REDDIT_SESSION` (the `reddit_session` cookie) |
-| X / Twitter | `twitter-cli` | `TWITTER_AUTH_TOKEN`, `TWITTER_CT0` |
+| YouTube | `yt-dlp` (free) | `yt-dlp` (free) |
+| Reddit | `rdt-cli` (free, `REDDIT_SESSION`) > TrueScrape > SocialCrawl | same order (TrueScrape adds reply threads) |
+| X / Twitter | `twitter-cli` (free, cookies) > **Bright Data SERP** (Google) > SocialCrawl | `twitter-cli` > SocialCrawl |
+| Instagram | **Bright Data SERP** > Apify > SocialCrawl | **TrueScrape** (cheap) > Apify > SocialCrawl |
+| LinkedIn | Bright Data SERP > SocialCrawl | SocialCrawl (the only comment source) |
+
+Known provider status (checked live, Oct 2026): TrueScrape's Instagram *discovery* endpoints are blocked upstream
+(they need residential proxies) so Instagram posts are found via Apify, while TrueScrape reads the comments;
+TrueScrape has no X search/replies and no LinkedIn comments; `twitter-cli` 0.8.5 currently fails on X search
+("Failed to init ClientTransaction"); SocialCrawl needs credits for LinkedIn. `GET /api/providers/status`
+shows what is usable right now and why.
+
+**Bright Data SERP (free tier).** Bright Data's free tier is 5,000 credits a month (no card, no rollover,
+shared by SERP / Web Unlocker / Web Scraper). Create a "SERP API" zone in its control panel: with exactly one SERP
+zone on the account it is found automatically (zones get renamed and deleted, so nothing needs editing); set
+`BRIGHTDATA_SERP_ZONE` only to pin one when you have several. `python scripts/serp_search.py --zones` lists your zones. SERP finds posts
+through Google (`site:x.com inurl:status "topic"`, `site:instagram.com topic`, `site:linkedin.com/posts topic`),
+1 credit per result page; it never reads comments, so the chain pairs it with whoever can. It also finds
+professionals' public profiles from the command line:
+
+```bash
+python scripts/serp_search.py 'site:linkedin.com/in clinical psychologist Bangalore' --pages 3 --csv
+```
+
+Bright Data reports success in response headers (HTTP is always 200) and does not bill failed requests; the client
+retries captchas and rejected queries. Google sometimes ignores the `site:` operator and the page is still billed, so
+such pages are flagged `degraded`, never cached, and off-target CLI rows are marked `?`. The default cap is
+150 credits a day (`BUDGET_BRIGHTDATA_PER_DAY`) so the free pool lasts the month.
+
+**Credit protection.** Every paid call goes through a persistent ledger (`server/collection/ledger.py`,
+SQLite): responses are cached (24h comments / 6h searches) so re-running a topic never pays twice, usage is
+logged per provider, and `BUDGET_<PROVIDER>_PER_JOB` / `_PER_DAY` limits (see `.env.example`) switch a
+provider off when reached. A provider that reports "no credits" or a bad key is remembered as blocked for
+30 minutes instead of being retried by every job. Instagram is only collected when the request names it.
+
+**No invented data.** If a provider returns nothing the platform simply contributes nothing and the reason is
+reported in the job notes; there are no placeholder users, likes or dates. `scripts/purge_synthetic_rows.py`
+removes rows written by earlier versions that did (dry run by default, backs up the database first).
 
 Collection takes minutes, so it is an async job:
 
@@ -353,8 +392,135 @@ Open `http://localhost:8080` in your web browser.
 | `POST` | `/api/collect/start` | Starts background collection job (`topic, platforms, target_comments, max_posts, max_minutes`). |
 | `GET` | `/api/collect/{job_id}/status` | Live status, per-platform stage, posts processed, and comments count. |
 | `GET` | `/api/collect/{job_id}/results` | Paginated comments with optional `platform` filter, `page`, `page_size`. |
-| `GET` | `/api/collect/{job_id}/export` | Direct file attachment download (`?format=csv` with UTF-8 BOM or `?format=json`). |
+| `GET` | `/api/collect/{job_id}/export` | Direct file attachment download (`?format=csv` with UTF-8 BOM or `?format=json`; add `&full=1` for provider, comment_id, parent_id and collected_at columns). |
+| `GET` | `/api/providers/status` | Provider usage, budgets, blocked providers and per-platform chains (never exposes secrets). |
 | `POST` | `/api/assistant/message` | Conversational assistant message dispatch (`session_id, text, action?`). |
+
+## Therapist & Psychiatrist Finder
+
+Finds practising therapists, psychologists and psychiatrists in a city who publish how to reach them, so the MMTF
+team can invite them to the platform. It only uses public, self-published information, and **nothing is contacted or
+exported until a person approves it**.
+
+```
+Google (Bright Data SERP)  ->  candidates: LinkedIn profile / Instagram handle / website      (LinkedIn pages are never opened)
+  -> rules drop non-clinicians (coaches, healers, students, patients, listing sites); Gemini only breaks ties
+  -> Instagram bio (TrueScrape, 1 credit) -> the clinician's own website -> its contact page     (robots.txt respected)
+  -> licence *claims*, city check, score -> saved as "new" -> a person reviews -> approved people are exported
+```
+
+```bash
+python scripts/find_professionals.py plan --city Bangalore                  # queries + maximum credits; spends nothing
+python scripts/find_professionals.py run  --city Bangalore                  # search, classify, read bios and sites
+python scripts/find_professionals.py list --has-channel any                 # review queue, best first ( ! = look closer )
+python scripts/find_professionals.py show 3fa9c1                            # every channel and the page it was found on
+python scripts/find_professionals.py enrich --limit 10 --max-credits 15     # each individual's own website, from their name
+python scripts/find_professionals.py enrich --audit                         # undo stored websites the current rules would reject
+python scripts/find_professionals.py review 3fa9c1 approve --note "RCI register checked"   # approve | reject | dnc | new
+python scripts/find_professionals.py licence 3fa9c1 verified                # record YOUR check in the official register
+python scripts/find_professionals.py export                                 # CSV of APPROVED people only
+```
+
+**Rules it keeps**
+* A caption that mentions a role is not a self-description: for Instagram only the bio (or first-person words) counts, and
+  accounts that speak as "we / our" are classified as organisations, not as the doctor they introduce.
+* Gemini is optional and only used for unclear cases; its answer is accepted only if it quotes words that really occur in
+  the text. If it is down or slow the run carries on and the unclear profiles stay flagged.
+* Websites: robots.txt honoured (an unreadable one means skip), at most two pages per site, one request per host per
+  second, plain HTTP only (no JavaScript, CAPTCHA solving or proxies). Only public internet addresses are fetched, so a
+  bio linking to `127.0.0.1` or a cloud-metadata address is refused, redirects included.
+* Every channel (email, phone, WhatsApp, contact form) stores the URL it was found on. Generic inboxes (`info@`) are
+  marked as such. `licence` data is a *claim* found in the text; only a person can mark it verified.
+* `dnc` (do not contact) and `suppress` put emails, phones, profiles and domains on a permanent list that exports
+  respect; shared mail providers (gmail.com ...) can never be suppressed by domain.
+* Cost control: `--max-credits` (search), `--max-profiles` (Instagram bios), `--max-sites`; repeated searches and bios
+  are cached. One run at a time.
+* `enrich` looks for an individual's own website by name (1 search credit each, hard `--max-credits` stop). A result counts
+  only if every name part and a psychology term appear in its title / snippet **and** the host is a personal domain or a
+  hospital / clinic site. Contact-data brokers (RocketReach, ZoomInfo ...), directories, health apps and journals are never
+  accepted: their phone numbers and emails are not the clinician's own. Lines found on a shared hospital page are stored as
+  generic. Every match carries the note "confirm it is this person" and still goes through review.
+
+**REST** (`/api/professionals*`; set `PROFESSIONALS_API_TOKEN` to require `Authorization: Bearer <token>`)
+`POST /runs` start - `GET /runs/{id}` status - `GET /` review queue (filters: status, role, entity_type, city, has_channel,
+needs_review, q, sort) - `GET /{id}` detail - `POST /{id}/review` - `POST /suppress` - `GET /export?status=approved&format=csv`.
+**MCP tools:** `find_professionals` (`dry_run` shows the plan), `get_professionals_run`, `list_professionals`,
+`review_professional`, `enrich_professionals`, `export_professionals`.
+
+**First live run (Bangalore, 2 specialties, about 6 search credits, 24-125 s):** 39 candidates -> 32 kept = 19 individual
+clinicians from LinkedIn (9 clinical psychologists, 10 psychiatrists) + 13 organisations. LinkedIn profiles carry no contact
+details (they stay behind a login), so for individuals the channel is their profile; email / phone / contact-form channels
+came from clinic and hospital sites (10 of 32 records). Known limits: the same person found on LinkedIn and Instagram is two
+records (merged only when an Instagram bio links to a site that was also found separately).
+
+**Name -> website (`enrich`), first live run:** the first version accepted any page that matched a name; of 17 "matches"
+16 were data brokers, directories or health apps, so the host rules above were added and `enrich --audit` undid those 16.
+With the strict rules, 4 of 26 individuals have their own site or a clinic page with published contact lines; the rest
+stay profile-only, which is the honest result: most clinicians publish no direct contact on a page that Google ties to
+their name.
+
+## Our Own Audience: Comments on MMTF's Posts and the Care Queue
+
+Reads the comments on **MMTF's own** Instagram posts and YouTube videos, labels each one with transparent rules, and turns
+the ones that look like a call for help into a **reply queue for people**. It exists so nobody who writes "please help" or
+"I want to die" under our post goes unanswered, and so the team can see who engages with its content.
+
+```
+MMTF_OWN_ACCOUNTS (the only accounts it will touch) -> list the account's recent posts -> each post's owner is verified
+  -> comments (TrueScrape ~1 credit per 15, or yt-dlp for free) -> rules label every comment -> SQLite
+  -> care queue: crisis > seeking_help > distress, oldest first, each with a reply DRAFT -> a person replies publicly -> marks it done
+```
+
+```bash
+# .env:  MMTF_OWN_ACCOUNTS="instagram:<our_handle>; youtube:@<our_channel>"     (nothing else can be collected)
+python scripts/audience.py accounts
+python scripts/audience.py collect --platform instagram --posts 10 --comments 500 --max-credits 60
+python scripts/audience.py queue                                    # who needs a person, most urgent first, with a draft reply
+python scripts/audience.py handle 3fa9c1 replied --by Asha --note "public reply posted"
+python scripts/audience.py export                                   # CSV: username, comment, label (personal data)
+python scripts/audience.py stats | purge --days 90 | forget --platform instagram --username someone
+```
+
+**Labels** (they describe the *comment*, never the person): `crisis` (wants to die / harm themselves, English, Hinglish,
+Hindi), `seeking_help` (asks for help or a professional), `distress` (a first-person statement of suffering), then `question`,
+`positive`, `spam`, `other`. Only the first three enter the queue. Urgent labels favour recall: a false alarm costs a reviewer
+seconds, a miss costs more. Every flag keeps the phrase that caused it. `possible_minor` (an age under 18, a school class, board
+exams) is a cue to reply more carefully, never a conclusion. General talk about suicide ("rates are rising") still gets a
+look, at the lowest priority.
+
+**Rules it keeps**
+* **Only our accounts.** The account must be in `MMTF_OWN_ACCOUNTS`; a typo in that value raises instead of weakening the
+  guard. Instagram grids can show collab / tagged posts owned by someone else, so a post is kept only if its reported owner
+  is the account (an unknown owner is dropped, never assumed); a pasted post URL is checked the same way. YouTube posts must
+  appear in the channel's own upload list. LinkedIn, X and Reddit are refused until their posts can be ownership-checked.
+* **The reply is public and written by a person.** Drafts are drafts: nothing is sent automatically, nothing asks the commenter
+  to move to a private chat, and nothing sells. Do not cold-message people who only commented. Crisis comments get the
+  helpline text first; the handling note says to reply publicly, not to ask for details in the thread and not to diagnose.
+* **No third-party model sees a comment.** Triage is rules only. The MCP tools return counts and a redacted queue (no
+  usernames, no text, no drafts); the words are read in the CLI or through the REST API.
+* **REST is default-deny.** `/api/care/queue`, `/api/care/stats`, `POST /api/care/{key}/handle` return 403 until
+  `AUDIENCE_API_TOKEN` is set, then need `Authorization: Bearer <token>`.
+* **Keep less.** `purge` deletes handled care items and ordinary comments older than N days (default 90); an unhandled care item
+  is never purged. `forget` erases one person's rows. Expired provider-cache rows (which hold raw comment payloads) are now
+  deleted automatically when the ledger opens. Exports go to the git-ignored `data/exports/`.
+* **Spreadsheet-safe CSV.** Comment text is written by strangers; a cell starting with `= + - @` would run as a formula in
+  Excel / Sheets. Every CSV export (comments, professionals, SERP) now prefixes such cells with `'`.
+* **Cost control.** `--max-credits` is checked between posts, and the per-job / per-day provider budgets still apply
+  (TrueScrape defaults: 60 per job, 200 per day; a 500-comment post needs about 34 requests, so raise
+  `BUDGET_TRUESCRAPE_PER_JOB` for a long run). Instagram comments are read with TrueScrape only: if it is unavailable or over
+  budget the run stops and says how to continue, and what was already read is saved (pages already paid for are kept). Pay-per-result
+  fallbacks (SocialCrawl, Apify) are used only with `--allow-fallback`, which the assistant cannot turn on.
+
+**Helplines in the drafts** (checked 2026-10-14 against the official Tele-MANAS portal and CHILDLINE pages): Tele-MANAS
+14416 / 1800-891-4416 (free, 24x7), 112 (India's single emergency number), CHILDLINE 1098 (added when a minor is suspected).
+Numbers change: override the text with `CARE_HELPLINE_TEXT`, re-check it every quarter, and add your own country's line for
+commenters outside India.
+
+**MCP tools:** `collect_own_comments`, `list_care_queue` (redacted), `update_care_item` (only when a person says they handled it).
+
+**Known limits:** Instagram comments arrive newest first and top-level only (no replies); the profile grid has no post dates, so
+"recent" means the grid's order; LinkedIn comments cannot be read with the providers in use (SocialCrawl has no credits);
+rules miss implicit or coded distress and will flag sarcasm, so the queue is a safety net for a human, not a classifier to trust.
 
 ## Instagram + Apify Demo
 

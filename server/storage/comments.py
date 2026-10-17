@@ -1,5 +1,6 @@
 """SQLite persistence for collection jobs and collected commenter rows."""
 
+import datetime
 import json
 import sqlite3
 from typing import Any, Dict, List, Optional
@@ -45,6 +46,11 @@ def init_comment_tables(db_path: Optional[str] = None) -> None:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_cc_job ON collected_comments(job_id, platform)")
+            # Columns added after the first release: migrate existing databases in place.
+            existing = {r["name"] for r in conn.execute("PRAGMA table_info(collected_comments)")}
+            for col in ("provider", "comment_id", "parent_id", "collected_at"):
+                if col not in existing:
+                    conn.execute(f"ALTER TABLE collected_comments ADD COLUMN {col} TEXT")
     finally:
         conn.close()
 
@@ -102,6 +108,7 @@ def save_comments(job_id: str, rows: List[CommentRow], db_path: Optional[str] = 
     if not rows:
         return 0
     init_comment_tables(db_path)
+    collected_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     conn = get_connection(db_path)
     inserted = 0
     try:
@@ -109,11 +116,13 @@ def save_comments(job_id: str, rows: List[CommentRow], db_path: Optional[str] = 
             for r in rows:
                 cur = conn.execute(
                     "INSERT OR IGNORE INTO collected_comments "
-                    "(job_id, platform, username, user_id, comment, likes, created_at, post_url, user_key, comment_key) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "(job_id, platform, username, user_id, comment, likes, created_at, post_url, user_key, comment_key, "
+                    "provider, comment_id, parent_id, collected_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         job_id, r.platform, r.username, r.user_id, r.comment, r.likes, r.created_at,
                         r.post_url, norm_username(r.username), norm_text(r.comment).lower(),
+                        r.provider, r.comment_id, r.parent_id, collected_at,
                     ),
                 )
                 inserted += cur.rowcount
@@ -122,7 +131,7 @@ def save_comments(job_id: str, rows: List[CommentRow], db_path: Optional[str] = 
     return inserted
 
 
-_COLS = "platform, username, user_id, comment, likes, created_at, post_url"
+_COLS = "platform, username, user_id, comment, likes, created_at, post_url, provider, comment_id, parent_id, collected_at"
 
 
 def get_comments(

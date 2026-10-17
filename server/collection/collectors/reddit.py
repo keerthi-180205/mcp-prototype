@@ -78,6 +78,7 @@ def _parse(out: str) -> Dict[str, Any]:
 
 class RedditCollector(PlatformCollector):
     platform = "reddit"
+    provider = "rdt-cli"
     batch_size = 3
     concurrency = 2
 
@@ -107,7 +108,7 @@ class RedditCollector(PlatformCollector):
             data = _parse(out)
         except CliError as exc:
             logger.warning("Reddit search failed: %s", exc)
-            return []
+            raise
         children = ((data.get("data") or {}).get("data") or {}).get("children") or []
         return [c.get("data") or {} for c in children if c.get("kind") == "t3"]
 
@@ -148,11 +149,18 @@ class RedditCollector(PlatformCollector):
         ]
         sem = asyncio.Semaphore(3)
 
-        async def _run(a: List[str]) -> List[Dict[str, Any]]:
+        async def _run(a: List[str]) -> Any:
             async with sem:
-                return await self._search(a)
+                try:
+                    return await self._search(a)
+                except CliError as exc:
+                    return exc
 
         batches = await asyncio.gather(*[_run(a) for a in jobs])
+        errors = [b for b in batches if isinstance(b, CliError)]
+        if errors and len(errors) == len(batches):
+            raise CliError(f"all {len(batches)} Reddit searches failed; last: {errors[-1]}")
+        batches = [b for b in batches if not isinstance(b, CliError)]
         found: Dict[str, PostCandidate] = {}
         for batch in batches:
             for d in batch:

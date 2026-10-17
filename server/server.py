@@ -1266,6 +1266,191 @@ def export_collection_results(job_id: str, format: str = "csv") -> Dict[str, Any
         return _job_error(exc)
 
 
+# ---------------------------------------------------------------------------
+# Therapist / psychiatrist finder: search -> human review -> approved export
+# ---------------------------------------------------------------------------
+from server.professionals import api as _pro_api  # noqa: E402
+from server.professionals.enrich import enrich_professionals as _enrich_professionals  # noqa: E402
+from server.professionals.export import export_professionals as _export_professionals  # noqa: E402
+from server.professionals.models import DEFAULT_SPECIALTIES as _DEFAULT_SPECIALTIES, FinderParams as _FinderParams  # noqa: E402
+from server.professionals.queries import build_queries as _build_queries, estimate as _estimate  # noqa: E402
+from server.professionals.runs import ProfessionalRunManager, RunError  # noqa: E402
+
+professional_runs = ProfessionalRunManager()
+
+
+@mcp.tool()
+async def find_professionals(
+    city: str,
+    specialties: Optional[List[str]] = None,
+    focus: Optional[str] = None,
+    platforms: Optional[List[str]] = None,
+    pages: int = 1,
+    max_search_credits: int = 30,
+    max_instagram_profiles: int = 15,
+    max_sites: int = 25,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """Find practising therapists, psychologists and psychiatrists in a city who publish how to reach them.
+
+    Searches Google for LinkedIn profiles, Instagram accounts and practice websites, keeps real clinicians
+    (coaches, students and patients are dropped), then reads the Instagram bio and the clinician's own
+    website for the contact channel they publish. LinkedIn pages are never opened. Everything is saved
+    for REVIEW: nothing is contacted or exported until a person approves it.
+
+    dry_run=true only returns the Google queries and the maximum credits a run could use.
+    Otherwise it starts in the background and returns a run_id: poll get_professionals_run, then
+    list_professionals and review_professional.
+    """
+    try:
+        params = dict(city=city, specialties=specialties or list(_DEFAULT_SPECIALTIES),
+                      focus=focus, platforms=platforms or ["linkedin", "instagram", "web"], pages=pages,
+                      max_serp_credits=max_search_credits, max_profile_lookups=max_instagram_profiles, max_sites=max_sites)
+        if dry_run:
+            p = _FinderParams(**params)
+            return {"status": "plan", "queries": [{"platform": q.platform, "query": q.q} for q in _build_queries(p)], "estimate": _estimate(p)}
+        return professional_runs.start(**params)
+    except (RunError, ValueError) as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def get_professionals_run(run_id: str) -> Dict[str, Any]:
+    """Progress and results summary of a finder run (candidates found, kept, credits used, why others were dropped)."""
+    try:
+        return professional_runs.status(run_id)
+    except RunError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def list_professionals(
+    status: str = "new",
+    role: Optional[str] = None,
+    city: Optional[str] = None,
+    has_channel: Optional[str] = None,
+    needs_review: Optional[bool] = None,
+    min_confidence: float = 0.0,
+    q: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> Dict[str, Any]:
+    """The review queue, best first. status: new | approved | rejected | do_not_contact | all.
+
+    has_channel: any | email | personal_email | phone | contact_form. Every channel lists the page it was found on.
+    """
+    try:
+        return _pro_api.list_view(status=status, role=role, city=city, has_channel=has_channel, needs_review=needs_review,
+                                  min_confidence=min_confidence, q=q, page=page, page_size=page_size)
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def review_professional(pro_id: str, decision: str, note: str = "") -> Dict[str, Any]:
+    """Record a person's decision on one professional: approve | reject | dnc | new.
+
+    Only a human should approve: check the licence in the official register first (RCI for psychologists, the
+    medical council for psychiatrists). dnc (do not contact) also puts their profile, emails and phones on the
+    permanent do-not-contact list.
+    """
+    try:
+        item = _pro_api.review_view(pro_id, decision, note)
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+    return item or {"status": "error", "message": f"unknown pro_id: {pro_id}"}
+
+
+@mcp.tool()
+async def enrich_professionals(limit: int = 10, max_search_credits: int = 15) -> Dict[str, Any]:
+    """Find individual clinicians' own websites from their names and read the contact page (best-ranked first).
+
+    LinkedIn profiles carry no contact details, so this is how an individual gets an email / phone / contact form.
+    One search credit per person. Every website is a best guess from the name: each record is flagged so a person
+    confirms it is the same individual before approving. Nobody is contacted.
+    """
+    try:
+        return {"status": "ok", **(await _enrich_professionals(limit=max(1, min(int(limit), 40)), max_credits=max(1, min(int(max_search_credits), 60))))}
+    except Exception as exc:  # surface provider problems as a message, not a crash
+        return {"status": "error", "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+@mcp.tool()
+def export_professionals(status: str = "approved", format: str = "csv") -> Dict[str, Any]:
+    """Export reviewed professionals to a CSV or JSON file and return its path.
+
+    Defaults to APPROVED people. Do-not-contact and suppressed people are never exported.
+    """
+    try:
+        return {"status": "ok", **_export_professionals([status], format)}
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Audience of MMTF's OWN accounts: comments on our posts -> triage -> care queue
+# ---------------------------------------------------------------------------
+from server.audience.collect import AudienceError as _AudienceError, collect_own_comments as _collect_own_comments  # noqa: E402
+from server.audience.queue import handle_item as _handle_care_item, queue_items as _care_queue_items  # noqa: E402
+from server.storage import audience as _audience_store  # noqa: E402
+
+
+@mcp.tool()
+async def collect_own_comments(
+    platform: str = "instagram",
+    account: Optional[str] = None,
+    post_urls: Optional[List[str]] = None,
+    max_posts: int = 10,
+    max_comments_per_post: int = 500,
+    max_credits: int = 60,
+) -> Dict[str, Any]:
+    """Read and triage the comments on MMTF's OWN posts (never anyone else's).
+
+    Works only for accounts listed in MMTF_OWN_ACCOUNTS, and every post is checked to belong to that account.
+    Comments are stored locally with a label (crisis / seeking_help / distress / question / positive / spam / other);
+    the first three form a reply queue for a person. Returns counts only: usernames and comment text stay in the
+    local database and are read through the CLI (`python scripts/audience.py queue`) or the guarded web API.
+    Spends provider credits (about 1 per 15 comments), capped by max_credits.
+    """
+    try:
+        summary = await _collect_own_comments(
+            platform, account=account, post_urls=post_urls or None, max_posts=max_posts,
+            max_comments_per_post=max_comments_per_post, max_credits=max(1, min(int(max_credits), 300)),
+        )
+        return {"status": "ok", **summary, "read_the_comments": "python scripts/audience.py queue"}
+    except (_AudienceError, ValueError) as exc:
+        return {"status": "error", "message": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+@mcp.tool()
+def list_care_queue(limit: int = 20, label: Optional[str] = None) -> Dict[str, Any]:
+    """Counts and a REDACTED list of comments on our own posts that need a person (most urgent first).
+
+    Deliberately omits usernames, comment text and reply drafts: a commenter's words are not sent to this assistant
+    just to route a queue. The team reads them with `python scripts/audience.py queue`.
+    """
+    try:
+        items = _care_queue_items(("new",), [label] if label else None, max(1, min(int(limit), 100)), with_text=False)
+        return {"status": "ok", "stats": _audience_store.stats(), "items": items, "read_the_text": "python scripts/audience.py queue"}
+    except Exception as exc:
+        return {"status": "error", "message": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+@mcp.tool()
+def update_care_item(key: str, status: str, handled_by: str = "", note: str = "") -> Dict[str, Any]:
+    """Record that a person replied to (or dismissed) a care-queue item: status is replied | dismissed | new.
+
+    Only call this when a team member says they have handled the item. Never mark an item yourself.
+    """
+    try:
+        done = _handle_care_item(_audience_store.resolve_key(key), status, handled_by, note)
+        return {"status": "ok", "item": done} if done else {"status": "error", "message": "item not found"}
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
 if __name__ == "__main__":
     mcp.run()
 
