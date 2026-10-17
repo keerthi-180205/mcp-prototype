@@ -54,8 +54,27 @@ def _items(payload: Any) -> List[Dict[str, Any]]:
 
 def unified_comment_row(item: Dict[str, Any], platform: str, post_url: str, provider: str) -> Optional[CommentRow]:
     """Map a TrueScrape unified comment (same schema on every platform) to a CommentRow."""
-    text = (item.get("text") or "").strip()
-    handle = (item.get("authorHandle") or "").strip()
+    text = (item.get("text") or item.get("comment") or item.get("caption") or "").strip()
+    author = item.get("user") or item.get("author") or {}
+    if not isinstance(author, dict):
+        author = {}
+    handle = (
+        item.get("authorHandle")
+        or item.get("username")
+        or item.get("ownerUsername")
+        or author.get("username")
+        or author.get("handle")
+        or item.get("authorName")
+        or author.get("name")
+        or ""
+    ).strip().lstrip("@")
+    author_id = item.get("authorId") or item.get("ownerId") or author.get("id") or item.get("userId")
+
+    if not handle and author_id:
+        handle = f"user_{author_id}"
+    elif not handle:
+        handle = "anonymous"
+
     if not text or text in REMOVED or handle.lower() in REMOVED or handle.lower() in BOT_AUTHORS:
         return None
     if item.get("isAuthorReply"):  # the post creator's own replies are not "commenters"
@@ -63,14 +82,14 @@ def unified_comment_row(item: Dict[str, Any], platform: str, post_url: str, prov
     return CommentRow(
         platform=platform,
         username=handle,
-        user_id=str(item["authorId"]) if item.get("authorId") else None,
+        user_id=str(author_id) if author_id else None,
         comment=text,
-        likes=int(item.get("likeCount") or 0),
-        created_at=item.get("publishedAt"),
+        likes=int(item.get("likeCount") or item.get("likesCount") or item.get("likes") or 0),
+        created_at=item.get("publishedAt") or item.get("createdAt") or item.get("timestamp"),
         post_url=post_url,
         provider=provider,
-        comment_id=str(item["id"]) if item.get("id") else None,
-        parent_id=str(item["parentId"]) if item.get("parentId") else None,
+        comment_id=str(item["id"]) if item.get("id") else (str(item["comment_id"]) if item.get("comment_id") else None),
+        parent_id=str(item["parentId"]) if item.get("parentId") else (str(item["parent_id"]) if item.get("parent_id") else None),
     )
 
 
@@ -140,6 +159,8 @@ class TrueScrapeBackend(MeteredMixin, PlatformCollector):
             return CollectorFatalError(f"TrueScrape rate/credit limit: {msg[:160]}")
         if isinstance(exc, TrueScrapeError) and ("HTTP 402" in msg or "credit" in msg.lower()):
             return CollectorFatalError(f"TrueScrape out of credits: {msg[:160]}")
+        if isinstance(exc, TrueScrapeError) and ("upstream_blocked" in msg or "residential_proxy" in msg or "502" in msg):
+            return CollectorFatalError(f"TrueScrape Instagram exit IP blocked: {msg[:160]}")
         return None
 
     async def _call(self, endpoint: str, params: Dict[str, Any], action: str, ttl: float) -> Dict[str, Any]:
@@ -289,6 +310,24 @@ class TrueScrapeBackend(MeteredMixin, PlatformCollector):
                 # from page one, so the chain still switches this provider off.
                 logger.warning("TrueScrape stopped after %d comments on %s; keeping them", len(rows), post.url)
                 break
+            except Exception as exc:
+                if page == 0:
+                    raise
+                logger.warning("TrueScrape stopped on %s after error: %s", post.url, exc)
+                break
+
+            if isinstance(payload, dict) and payload.get("success") is False:
+                err = payload.get("error") or {}
+                err_code = err.get("code")
+                err_msg = err.get("message") or ""
+                if err_code == "empty_result":
+                    break
+                if err_code == "upstream_blocked" or "residential_proxy" in err_msg or "blocked" in err_msg.lower():
+                    raise CollectorFatalError(f"TrueScrape Instagram exit IP blocked: {err_msg[:160]}")
+                if page == 0:
+                    raise TrueScrapeError(f"TrueScrape error: {err_code} - {err_msg[:160]}")
+                break
+
             rows += [r for r in (unified_comment_row(i, "instagram", post.url, self.provider) for i in _items(payload)) if r]
             pagination = payload.get("pagination") or {}
             cursor = pagination.get("cursor")

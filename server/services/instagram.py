@@ -26,9 +26,9 @@ from server.providers.truescrape.instagram import TrueScrapeInstagramProvider
 
 logger = get_logger(__name__)
 
-# Regular expression pattern to validate public Instagram post or reel URLs
+# Regular expression pattern to validate public Instagram post or reel URLs (with or without username)
 INSTAGRAM_URL_PATTERN = re.compile(
-    r"^https?://(www\.)?instagram\.com/(p|reel|reels)/([A-Za-z0-9_-]+)/?.*$",
+    r"^https?://(?:www\.)?instagram\.com/(?:([A-Za-z0-9_.]+)/)?(p|reel|reels|tv)/([A-Za-z0-9_-]+)/?.*$",
     re.IGNORECASE,
 )
 
@@ -50,7 +50,7 @@ def validate_instagram_url(url: str) -> str:
         url: The candidate URL.
 
     Returns:
-        The stripped, canonical URL.
+        The stripped, validated URL.
 
     Raises:
         InstagramValidationError: If the URL is empty or does not match Instagram format.
@@ -163,11 +163,16 @@ def normalize_post_data(raw_item: Dict[str, Any]) -> InstagramPost:
         or raw_item.get("authorName")
     )
 
+    if not author_username and raw_url:
+        m = INSTAGRAM_URL_PATTERN.match(str(raw_url))
+        if m and m.group(1) and m.group(1).lower() not in ("p", "reel", "reels", "tv", "explore", "stories", "direct"):
+            author_username = m.group(1)
+
     author = None
     if author_id or author_username or author_name:
         author = InstagramAuthor(
             id=str(author_id) if author_id is not None else None,
-            username=str(author_username) if author_username is not None else None,
+            username=str(author_username).lstrip("@").strip() if author_username is not None else None,
             display_name=str(author_name) if author_name is not None else None,
         )
 
@@ -247,10 +252,19 @@ def normalize_comment_data(raw_item: Dict[str, Any]) -> InstagramComment:
     )
     u_username = (
         user_dict.get("username")
+        or user_dict.get("handle")
         or raw_item.get("ownerUsername")
         or raw_item.get("username")
         or raw_item.get("authorHandle")
+        or raw_item.get("author_handle")
+        or user_dict.get("name")
+        or raw_item.get("authorName")
     )
+    if u_username:
+        u_username = str(u_username).strip().lstrip("@")
+    elif u_id:
+        u_username = f"user_{u_id}"
+
     u_name = (
         user_dict.get("full_name")
         or user_dict.get("name")
@@ -433,10 +447,25 @@ class InstagramService:
         if max_comments <= 0:
             raise InstagramValidationError("max_comments must be a positive integer.")
 
-        raw_items = await self.provider.get_post_comments(
-            post_url=clean_url,
-            max_comments=max_comments,
-        )
+        raw_items = []
+        try:
+            raw_items = await self.provider.get_post_comments(
+                post_url=clean_url,
+                max_comments=max_comments,
+            )
+        except Exception as exc:
+            logger.warning("[INSTAGRAM_SERVICE] Primary provider get_post_comments failed: %s", exc)
+
+        # Fallback to Apify if primary provider returned no comments or failed
+        if not raw_items and self.provider != self.apify_provider and self.apify_provider.is_available():
+            logger.info("[INSTAGRAM_SERVICE] Falling back to Apify provider for comments on %s", clean_url)
+            try:
+                raw_items = await self.apify_provider.get_post_comments(
+                    post_url=clean_url,
+                    max_comments=max_comments,
+                )
+            except Exception as exc:
+                logger.warning("[INSTAGRAM_SERVICE] Apify fallback get_post_comments failed: %s", exc)
 
         comments: List[InstagramComment] = []
         for raw in raw_items[:max_comments]:

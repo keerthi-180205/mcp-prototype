@@ -182,16 +182,25 @@ class TrueScrapeInstagramSocialProvider(SocialDataProvider):
 
         for c in raw_comments:
             user_data = c.get("user") or {}
+            uid = user_data.get("id") or c.get("authorId")
+            uname = (
+                user_data.get("username")
+                or user_data.get("handle")
+                or c.get("authorHandle")
+                or c.get("username")
+                or user_data.get("name")
+                or (f"user_{uid}" if uid else "anonymous")
+            ).strip().lstrip("@")
             interactions.append(
                 SocialInteraction(
                     interaction_id=str(c.get("comment_id") or c.get("id") or ""),
                     type="comment",
                     text=c.get("text") or "",
                     author=SocialAuthor(
-                        username=user_data.get("username"),
-                        user_id=str(user_data.get("id") or ""),
+                        username=uname,
+                        user_id=str(uid) if uid else None,
                         display_name=user_data.get("name"),
-                        profile_url=f"https://www.instagram.com/{user_data.get('username')}/" if user_data.get("username") else None,
+                        profile_url=f"https://www.instagram.com/{uname}/" if uname and uname != "anonymous" else None,
                         profile_pic_url=user_data.get("profile_pic_url"),
                     ),
                     created_at=c.get("timestamp"),

@@ -18,8 +18,22 @@ MAX_TAGS = 3
 DISCOVERY_BUDGET_SHARE = 0.4
 
 
+import re
+
+
 def _post_key(url: Optional[str]) -> str:
     return (url or "").split("?")[0].rstrip("/").lower()
+
+
+def _extract_shortcode(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return None
+    clean = (url or "").split("?")[0].rstrip("/")
+    m = re.search(r"/(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)", clean, re.IGNORECASE)
+    if m:
+        return m.group(1).lower()
+    last = clean.split("/")[-1].lower() if clean else None
+    return last if last and len(last) >= 4 else None
 
 
 class InstagramCollector(PlatformCollector):
@@ -165,11 +179,24 @@ class InstagramCollector(PlatformCollector):
         self._account(len(items), self.price_comment)
 
         by_key = {_post_key(p.url): p.url for p in posts}
+        by_code = {}
+        for p in posts:
+            code = _extract_shortcode(p.url)
+            if code:
+                by_code[code] = p.url
+
         results: Dict[str, List[CommentRow]] = {p.url: [] for p in posts}
         for it in items:
             if not isinstance(it, dict) or it.get("error"):
                 continue
-            url = by_key.get(_post_key(it.get("postUrl") or it.get("inputUrl")))
+            item_url = it.get("postUrl") or it.get("inputUrl") or it.get("url") or it.get("commentUrl")
+            url = by_key.get(_post_key(item_url)) if item_url else None
+            if not url and item_url:
+                code = _extract_shortcode(item_url)
+                if code:
+                    url = by_code.get(code)
+            if not url and len(posts) == 1:
+                url = posts[0].url
             if not url:
                 continue
             results[url].extend(self._rows(it, url))
@@ -178,17 +205,57 @@ class InstagramCollector(PlatformCollector):
 
     @classmethod
     def _rows(cls, item: Dict[str, Any], post_url: str) -> List[CommentRow]:
-        owner = item.get("owner") or {}
-        uid = owner.get("id") or item.get("ownerId")
+        owner = item.get("owner")
+        if not isinstance(owner, dict):
+            owner = {}
+        author = item.get("author")
+        if not isinstance(author, dict):
+            author = {}
+        user_dict = item.get("user")
+        if not isinstance(user_dict, dict):
+            user_dict = {}
+
+        uid = (
+            owner.get("id")
+            or item.get("ownerId")
+            or author.get("id")
+            or user_dict.get("id")
+            or item.get("authorId")
+            or item.get("userId")
+        )
+        username = (
+            item.get("ownerUsername")
+            or owner.get("username")
+            or item.get("authorHandle")
+            or item.get("username")
+            or author.get("username")
+            or author.get("handle")
+            or user_dict.get("username")
+            or owner.get("name")
+            or author.get("name")
+            or item.get("authorName")
+            or ""
+        ).strip().lstrip("@")
+
+        if not username and uid:
+            username = f"user_{uid}"
+
+        text = (item.get("text") or item.get("caption") or item.get("comment") or "").strip()
+        if not text and item.get("media"):
+            text = "[Media Comment]"
+
+        cid = item.get("id") or item.get("commentId") or item.get("comment_id") or item.get("pk")
+
         rows = [
             CommentRow(
                 platform="instagram",
-                username=item.get("ownerUsername") or owner.get("username") or "",
+                username=username,
                 user_id=str(uid) if uid is not None else None,
-                comment=item.get("text") or "",
-                likes=int(item.get("likesCount") or 0),
-                created_at=item.get("timestamp"),
+                comment=text,
+                likes=int(item.get("likesCount") or item.get("likeCount") or item.get("likes") or 0),
+                created_at=item.get("timestamp") or item.get("createdAt") or item.get("publishedAt"),
                 post_url=post_url,
+                comment_id=str(cid) if cid is not None else None,
             )
         ]
         replies = item.get("replies")

@@ -37,7 +37,7 @@ MAX_PAGES = 2     # Google result pages per query (1 credit each)
 SUPPORTED = ("x", "instagram", "linkedin")
 
 _X_STATUS = re.compile(r"https?://(?:www\.|mobile\.)?(?:x|twitter)\.com/([A-Za-z0-9_]{1,15})/status/(\d+)")
-_IG_POST = re.compile(r"https?://(?:www\.)?instagram\.com/(?:[A-Za-z0-9_.]+/)?(p|reels?|tv)/([A-Za-z0-9_-]+)")
+_IG_POST = re.compile(r"https?://(?:www\.)?instagram\.com/(?:([A-Za-z0-9_.]+)/)?(p|reels?|tv)/([A-Za-z0-9_-]+)")
 _LI_POST = re.compile(r"https?://(?:[a-z]{2,3}\.|www\.)?linkedin\.com/(?:posts/[^\s?#]+|feed/update/urn:li:activity:\d+)")
 
 
@@ -95,9 +95,18 @@ class SerpSearch(MeteredMixin):
 
 def _handle(source: str) -> Optional[str]:
     """"Instagram · dr.jud" -> "dr.jud"."""
-    if "·" not in source:
+    if not source:
         return None
-    return source.split("·", 1)[1].strip() or None
+    for sep in ("·", "-", ":", "|"):
+        if sep in source:
+            parts = source.split(sep, 1)
+            cand1 = parts[1].strip().lstrip("@")
+            if cand1 and not cand1.lower().startswith("instagram") and not cand1.lower().startswith("linkedin"):
+                return cand1
+            cand0 = parts[0].strip().lstrip("@")
+            if cand0 and not cand0.lower().startswith("instagram") and not cand0.lower().startswith("linkedin"):
+                return cand0
+    return None
 
 
 class SerpDiscoveryBackend(PlatformCollector):
@@ -151,11 +160,28 @@ class SerpDiscoveryBackend(PlatformCollector):
             m = _IG_POST.match(r.url)
             if not m:
                 return None
-            kind = "reel" if m.group(1).startswith("reel") else m.group(1)
-            code = m.group(2)
+            url_user = m.group(1)
+            if url_user and url_user.lower() in ("p", "reel", "reels", "tv", "explore", "stories", "direct"):
+                url_user = None
+            kind = "reel" if m.group(2).startswith("reel") else m.group(2)
+            code = m.group(3)
+
+            author = (
+                (url_user.lstrip("@").strip() if url_user else None)
+                or _handle(r.source)
+            )
+            if not author and r.title:
+                m_title = re.search(r"\(?@([A-Za-z0-9_.]+)\)?", r.title)
+                if m_title:
+                    author = m_title.group(1).strip()
+            if not author and r.snippet:
+                m_snip = re.search(r"(?:^|[\s·-])@?([A-Za-z0-9_.]+):\s|comments\s*-\s*([A-Za-z0-9_.]+)\s+on\b", r.snippet)
+                if m_snip:
+                    author = (m_snip.group(1) or m_snip.group(2)).strip()
+
             return PostCandidate(
                 platform="instagram", post_id=code, url=f"https://www.instagram.com/{kind}/{code}/",
-                title=(r.title or r.snippet)[:200], text=r.snippet or r.title, author_username=_handle(r.source),
+                title=(r.title or r.snippet)[:200], text=r.snippet or r.title, author_username=author,
                 like_count=likes, published_at=published, extra=extra,
             )
         m = _LI_POST.match(r.url)
